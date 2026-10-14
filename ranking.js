@@ -85,21 +85,21 @@
       return s;
     });
 
-    // 정렬 기준: 승점 > 승률 > 게임 득실차 > 세트 득실차 > 이름
+    // 정렬 기준: 승점 > 승률 > 게임 득실차 > 게임 득점 > 이름
     list.sort((a, b) =>
       b.points - a.points ||
       b.winRate - a.winRate ||
       (b.gamesWon - b.gamesLost) - (a.gamesWon - a.gamesLost) ||
-      (b.setsWon - b.setsLost) - (a.setsWon - a.setsLost) ||
+      b.gamesWon - a.gamesWon ||
       a.name.localeCompare(b.name, 'ko'));
 
-    // 동률(승점·승률·게임/세트 득실 모두 같음)이면 같은 순위
+    // 동률(승점·승률·게임 득실차·게임 득점 모두 같음)이면 같은 순위
     let rank = 0;
     list.forEach((s, i) => {
       const prev = list[i - 1];
       const tied = prev && prev.points === s.points && prev.winRate === s.winRate &&
         prev.gamesWon - prev.gamesLost === s.gamesWon - s.gamesLost &&
-        prev.setsWon - prev.setsLost === s.setsWon - s.setsLost;
+        prev.gamesWon === s.gamesWon;
       rank = tied ? rank : i + 1;
       s.rank = rank;
     });

@@ -96,3 +96,13 @@ test('무승부: 세트·게임이 모두 같으면 무승부, 승점 반영', (
   assert.deepStrictEqual([d.total.wins, d.total.draws, d.total.losses], [1, 1, 0]);
   assert.strictEqual(d.opponents.find((o) => o.id === 'b').total.draws, 1);
 });
+
+test('동률 처리: 승점·승률·게임 득실차가 같으면 게임 득점 많은 쪽이 위', () => {
+  const members = [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }, { id: 'c', name: 'C' }, { id: 'd', name: 'D' }];
+  const matches = [
+    { date: '2026-10-01', teamA: ['a'], teamB: ['c'], sets: [[6, 4]] }, // a: +2, 6득
+    { date: '2026-10-01', teamA: ['b'], teamB: ['d'], sets: [[7, 5]] }, // b: +2, 7득
+  ];
+  const s = computeStandings(members, matches, { winPoints: 2, drawPoints: 1, lossPoints: 0 });
+  assert.deepStrictEqual(s.slice(0, 2).map((x) => [x.id, x.rank, x.gamesWon]), [['b', 1, 7], ['a', 2, 6]]);
+});

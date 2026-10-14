@@ -22,7 +22,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
 <style>
-/* Layout: 하드코트 블루 헤더 밴드 + 탭 아래 한 컬럼. 경기 기록은 전광판 형태의 세트 스코어 */
+/* Layout: 하드코트 블루 헤더 밴드 + 탭 아래 한 컬럼. 경기 기록은 전광판 형태의 게임 스코어 */
 :root {
   --bg: #f2f5f8;
   --surface: #ffffff;
@@ -228,7 +228,7 @@ header .wrap { position: relative; }
     <section role="tabpanel" id="p-rank" aria-labelledby="tab-rank">
       <div>
         <h2 id="rank-title">전체 순위</h2>
-        <p class="hint" id="rule-hint">승점 → 승률 → 게임 득실차 → 세트 득실차 순으로 정렬합니다.</p>
+        <p class="hint" id="rule-hint">승점 → 승률 → 게임 득실차 → 게임 득점 순으로 정렬합니다.</p>
       </div>
       <div class="filters">
         <div class="field">
@@ -263,7 +263,7 @@ header .wrap { position: relative; }
     <section role="tabpanel" id="p-add" aria-labelledby="tab-add" hidden>
       <div>
         <h2 id="add-title">경기 결과 입력</h2>
-        <p class="hint">팀 A 기준으로 세트 스코어를 적어 주세요. 예: <code>6-4, 3-6, 7-6(5)</code></p>
+        <p class="hint">팀 A 기준으로 게임 스코어를 적어 주세요. 예: <code>6-4</code> (여러 세트를 했다면 <code>6-4, 3-6, 7-5</code>)</p>
       </div>
       <div class="notice edit-banner" id="edit-banner" hidden>
         <span id="edit-desc"></span>
@@ -277,8 +277,8 @@ header .wrap { position: relative; }
           <div class="row">
             <fieldset class="seg field" id="f-type">
               <legend>경기 유형</legend>
-              <label><input type="radio" name="mtype" id="t-single" value="single" checked> 단식</label>
-              <label><input type="radio" name="mtype" id="t-double" value="double"> 복식</label>
+              <label><input type="radio" name="mtype" id="t-single" value="single"> 단식</label>
+              <label><input type="radio" name="mtype" id="t-double" value="double" checked> 복식</label>
             </fieldset>
             <div class="field">
               <label for="f-by">입력하는 사람</label>
@@ -370,11 +370,11 @@ header .wrap { position: relative; }
     </section>
   </div>
 </main>
-<footer class="ver wrap">클럽 테니스 랭킹 · 버전 <span id="app-ver">2026.10.14-6</span></footer>
+<footer class="ver wrap">클럽 테니스 랭킹 · 버전 <span id="app-ver">2026.10.14-7</span></footer>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="config.js?v=2026.10.14-6"></script>
-<script src="ranking.js?v=2026.10.14-6"></script>
+<script src="config.js?v=2026.10.14-7"></script>
+<script src="ranking.js?v=2026.10.14-7"></script>
 <script>
 (function () {
   'use strict';
@@ -451,18 +451,18 @@ header .wrap { position: relative; }
       .filter((s) => s.played || !(month || type));
     const diff = (n) => `<span class="${n > 0 ? 'pos' : n < 0 ? 'neg' : ''}">${n > 0 ? '+' : ''}${n}</span>`;
     el.innerHTML = `<div class="table-scroll"><table>
-      <thead><tr><th>순위</th><th class="l">이름</th><th>경기</th><th>승</th><th>무</th><th>패</th><th>승률</th><th>세트</th><th>게임 득실</th><th>승점</th><th class="l">최근 5경기</th></tr></thead>
+      <thead><tr><th>순위</th><th class="l">이름</th><th>경기</th><th>승</th><th>무</th><th>패</th><th>승률</th><th>게임</th><th>게임 득실</th><th>승점</th><th class="l">최근 5경기</th></tr></thead>
       <tbody>${rows.map((s) => `<tr>
         <td class="rank">${s.rank}</td>
         <td class="l name"><button type="button" class="namelink" data-player="${esc(s.id)}">${esc(s.name)}</button>${s.rank === 1 && s.played ? '<span class="ballmark" title="1위"></span>' : ''}</td>
         <td>${s.played}</td><td>${s.wins}</td><td>${s.draws}</td><td>${s.losses}</td>
         <td>${s.played ? (s.winRate * 100).toFixed(0) + '%' : '–'}</td>
-        <td>${s.setsWon}-${s.setsLost}</td>
+        <td>${s.gamesWon}-${s.gamesLost}</td>
         <td>${diff(s.gamesWon - s.gamesLost)}</td>
         <td class="pts">${s.points}</td>
         <td class="l"><span class="form">${s.recent.slice().reverse().map((r) => `<span class="wl ${r}">${r}</span>`).join('') || '<span class="hint">–</span>'}</span></td>
       </tr>`).join('')}</tbody></table></div>`;
-    $('rule-hint').textContent = `승리 ${state.settings.winPoints}점 · 무승부 ${state.settings.drawPoints}점 · 패배 ${state.settings.lossPoints}점. 승점 → 승률 → 게임 득실차 → 세트 득실차 순으로 정렬합니다.`;
+    $('rule-hint').textContent = `승리 ${state.settings.winPoints}점 · 무승부 ${state.settings.drawPoints}점 · 패배 ${state.settings.lossPoints}점. 승점 → 승률 → 게임 득실차 → 게임 득점 순으로 정렬합니다.`;
   }
 
   function fillSelect(sel, placeholder, keep) {
@@ -723,7 +723,8 @@ header .wrap { position: relative; }
         p.textContent = `무승부 · 게임 ${f.r.gamesA}-${f.r.gamesB} · 양쪽 모두 승점 ${state.settings.drawPoints}점`;
       } else {
         const w = f.r.winner === 'A' ? f.teamA : f.teamB;
-        p.textContent = `${teamName(w)} 승리 · 세트 ${Math.max(f.r.setsA, f.r.setsB)}-${Math.min(f.r.setsA, f.r.setsB)}`;
+        const gw = f.r.winner === 'A' ? f.r.gamesA : f.r.gamesB, gl = f.r.winner === 'A' ? f.r.gamesB : f.r.gamesA;
+        p.textContent = `${teamName(w)} 승리 · 게임 ${gw}-${gl}`;
       }
       p.className = 'preview ok';
     } catch (e) { p.textContent = e.message; p.className = 'preview err'; }
@@ -781,6 +782,7 @@ header .wrap { position: relative; }
     $('add-title').textContent = '경기 결과 입력';
     $('save-btn').textContent = '결과 저장';
     $('f-score').value = ''; $('f-date').value = today();
+    $('t-double').checked = true; $('t-single').checked = false; syncType();
     ['a1', 'a2', 'b1', 'b2'].forEach((k) => { $(k).value = ''; });
     $('f-by').value = store.get('entered_by') || '';
     updatePreview();
@@ -934,7 +936,7 @@ header .wrap { position: relative; }
 
 
   // ---------- 새 버전 확인 ----------
-  const APP_VERSION = '2026.10.14-6';
+  const APP_VERSION = '2026.10.14-7';
   async function checkVersion() {
     try {
       const res = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });

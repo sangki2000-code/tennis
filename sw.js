@@ -1,6 +1,6 @@
 // 앱 화면 파일을 저장해 두었다가 인터넷이 약할 때도 빨리 열리게 합니다.
 // 경기 데이터(Supabase)는 저장하지 않고 항상 서버에서 새로 받습니다.
-const CACHE = 'tennis-v5';
+const CACHE = 'tennis-v6';
 const SHELL = [
   './', './index.html', './ranking.js', './config.js', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png', './icons/favicon-64.png',
