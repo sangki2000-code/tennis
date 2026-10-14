@@ -5,7 +5,7 @@
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  const DEFAULT_SETTINGS = { winPoints: 3, lossPoints: 1 };
+  const DEFAULT_SETTINGS = { winPoints: 3, drawPoints: 1, lossPoints: 1 };
 
   // "6-4, 3-6, 7-6(5)" -> [[6,4],[3,6],[7,6]]
   function parseScore(text) {
@@ -15,22 +15,28 @@
       if (!m) throw new Error(`스코어 형식이 잘못되었습니다: "${part}" (예: 6-4, 3-6, 7-5)`);
       const a = Number(m[1]);
       const b = Number(m[2]);
-      if (a === b) throw new Error(`무승부 세트는 입력할 수 없습니다: "${part}"`);
       return [a, b];
     });
     return sets;
   }
 
   // 세트를 더 많이 딴 쪽이 승리. 세트 수가 같으면 게임 수로 판정.
+  // 세트 수와 게임 수가 모두 같으면 무승부(winner 'D'). 동점 세트(예: 5-5)는 어느 쪽 세트로도 세지 않습니다.
   function decideWinner(sets) {
+    if (!sets || !sets.length) throw new Error('스코어를 입력하세요.');
     let setsA = 0, setsB = 0, gamesA = 0, gamesB = 0;
     for (const [a, b] of sets) {
-      if (a > b) setsA++; else setsB++;
+      if (a > b) setsA++; else if (b > a) setsB++;
       gamesA += a; gamesB += b;
     }
     if (setsA !== setsB) return { winner: setsA > setsB ? 'A' : 'B', setsA, setsB, gamesA, gamesB };
     if (gamesA !== gamesB) return { winner: gamesA > gamesB ? 'A' : 'B', setsA, setsB, gamesA, gamesB };
-    throw new Error('승자를 판정할 수 없습니다. 스코어를 확인하세요.');
+    return { winner: 'D', setsA, setsB, gamesA, gamesB };
+  }
+
+  // 한쪽 기준 결과: 'W' 승, 'D' 무, 'L' 패
+  function resultFor(r, side) {
+    return r.winner === 'D' ? 'D' : r.winner === side ? 'W' : 'L';
   }
 
   function formatScore(sets) {
@@ -40,7 +46,7 @@
   function emptyStats(member) {
     return {
       id: member.id, name: member.name,
-      played: 0, wins: 0, losses: 0,
+      played: 0, wins: 0, draws: 0, losses: 0,
       setsWon: 0, setsLost: 0, gamesWon: 0, gamesLost: 0,
       points: 0, winRate: 0, recent: [],
     };
@@ -55,18 +61,20 @@
     for (const match of ordered) {
       const r = decideWinner(match.sets);
       const sides = [
-        { ids: match.teamA, won: r.winner === 'A', sw: r.setsA, sl: r.setsB, gw: r.gamesA, gl: r.gamesB },
-        { ids: match.teamB, won: r.winner === 'B', sw: r.setsB, sl: r.setsA, gw: r.gamesB, gl: r.gamesA },
+        { ids: match.teamA, res: resultFor(r, 'A'), sw: r.setsA, sl: r.setsB, gw: r.gamesA, gl: r.gamesB },
+        { ids: match.teamB, res: resultFor(r, 'B'), sw: r.setsB, sl: r.setsA, gw: r.gamesB, gl: r.gamesA },
       ];
       for (const side of sides) {
         for (const id of side.ids) {
           const s = table.get(id);
           if (!s) continue; // 삭제된 멤버
           s.played++;
-          if (side.won) { s.wins++; s.points += cfg.winPoints; } else { s.losses++; s.points += cfg.lossPoints; }
+          if (side.res === 'W') { s.wins++; s.points += cfg.winPoints; }
+          else if (side.res === 'D') { s.draws++; s.points += cfg.drawPoints; }
+          else { s.losses++; s.points += cfg.lossPoints; }
           s.setsWon += side.sw; s.setsLost += side.sl;
           s.gamesWon += side.gw; s.gamesLost += side.gl;
-          s.recent.push(side.won ? 'W' : 'L');
+          s.recent.push(side.res);
         }
       }
     }
@@ -111,9 +119,10 @@
       (!f.type || (f.type === 'double') === (m.teamA.length > 1)));
   }
 
-  function newRecord() { return { played: 0, wins: 0, losses: 0, gamesWon: 0, gamesLost: 0 }; }
-  function addResult(rec, won, gw, gl) {
-    rec.played++; if (won) rec.wins++; else rec.losses++;
+  function newRecord() { return { played: 0, wins: 0, draws: 0, losses: 0, gamesWon: 0, gamesLost: 0 }; }
+  function addResult(rec, res, gw, gl) {
+    rec.played++;
+    if (res === 'W') rec.wins++; else if (res === 'D') rec.draws++; else rec.losses++;
     rec.gamesWon += gw; rec.gamesLost += gl;
   }
 
@@ -127,27 +136,27 @@
       const side = m.teamA.includes(memberId) ? 'A' : m.teamB.includes(memberId) ? 'B' : null;
       if (!side) continue;
       const r = decideWinner(m.sets);
-      const won = r.winner === side;
+      const res = resultFor(r, side);
       const gw = side === 'A' ? r.gamesA : r.gamesB, gl = side === 'A' ? r.gamesB : r.gamesA;
       const mine = side === 'A' ? m.teamA : m.teamB, theirs = side === 'A' ? m.teamB : m.teamA;
       const isDouble = m.teamA.length > 1;
-      addResult(total, won, gw, gl);
-      addResult(isDouble ? doubles : singles, won, gw, gl);
+      addResult(total, res, gw, gl);
+      addResult(isDouble ? doubles : singles, res, gw, gl);
       for (const id of theirs) {
         if (!opponents.has(id)) opponents.set(id, { id, total: newRecord(), singles: newRecord(), doubles: newRecord() });
         const o = opponents.get(id);
-        addResult(o.total, won, gw, gl);
-        addResult(isDouble ? o.doubles : o.singles, won, gw, gl);
+        addResult(o.total, res, gw, gl);
+        addResult(isDouble ? o.doubles : o.singles, res, gw, gl);
       }
       for (const id of mine) {
         if (id === memberId) continue;
         if (!partners.has(id)) partners.set(id, Object.assign({ id }, newRecord()));
-        addResult(partners.get(id), won, gw, gl);
+        addResult(partners.get(id), res, gw, gl);
       }
       const mk = (m.date || '').slice(0, 7);
       if (!months.has(mk)) months.set(mk, Object.assign({ month: mk }, newRecord()));
-      addResult(months.get(mk), won, gw, gl);
-      history.push(won ? 'W' : 'L');
+      addResult(months.get(mk), res, gw, gl);
+      history.push(res);
     }
     let streak = null;
     if (history.length) {

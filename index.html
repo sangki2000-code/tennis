@@ -103,6 +103,8 @@ td.pts { font: 700 20px var(--font-display); color: var(--court); }
 .wl { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 4px; font: 700 12px var(--font-display); }
 .wl.W { background: var(--win-bg); color: var(--win); }
 .wl.L { background: var(--loss-bg); color: var(--loss); }
+.wl.D { background: var(--bg); color: var(--muted); border: 1px solid var(--line); }
+.rec .d { color: var(--muted); font-weight: 600; }
 .pos { color: var(--win); } .neg { color: var(--loss); }
 
 /* 폼 */
@@ -333,6 +335,10 @@ header .wrap { position: relative; }
           <input type="number" id="s-win" min="0" max="10" step="1">
         </div>
         <div class="field" style="flex:0 1 140px">
+          <label for="s-draw">무승부 승점</label>
+          <input type="number" id="s-draw" min="0" max="10" step="1">
+        </div>
+        <div class="field" style="flex:0 1 140px">
           <label for="s-loss">패배 승점</label>
           <input type="number" id="s-loss" min="0" max="10" step="1">
         </div>
@@ -382,7 +388,7 @@ header .wrap { position: relative; }
     duplicate_member: '같은 이름의 멤버가 이미 있습니다.',
     member_has_matches: '경기 기록이 있는 멤버는 삭제할 수 없습니다.',
     match_not_found: '이 경기는 이미 삭제되었습니다. 경기 기록을 다시 확인하세요.',
-    bad_points: '승리 승점은 패배 승점보다 크거나 같아야 합니다. (0~10)',
+    bad_points: '승점은 승리 ≥ 무승부 ≥ 패배 순서로, 0~10점 사이로 정하세요.',
     bad_new_pin: '새 PIN은 숫자 4~8자리로 입력하세요.',
   };
 
@@ -432,18 +438,18 @@ header .wrap { position: relative; }
       .filter((s) => s.played || !(month || type));
     const diff = (n) => `<span class="${n > 0 ? 'pos' : n < 0 ? 'neg' : ''}">${n > 0 ? '+' : ''}${n}</span>`;
     el.innerHTML = `<div class="table-scroll"><table>
-      <thead><tr><th>순위</th><th class="l">이름</th><th>경기</th><th>승</th><th>패</th><th>승률</th><th>세트</th><th>게임 득실</th><th>승점</th><th class="l">최근 5경기</th></tr></thead>
+      <thead><tr><th>순위</th><th class="l">이름</th><th>경기</th><th>승</th><th>무</th><th>패</th><th>승률</th><th>세트</th><th>게임 득실</th><th>승점</th><th class="l">최근 5경기</th></tr></thead>
       <tbody>${rows.map((s) => `<tr>
         <td class="rank">${s.rank}</td>
         <td class="l name"><button type="button" class="namelink" data-player="${esc(s.id)}">${esc(s.name)}</button>${s.rank === 1 && s.played ? '<span class="ballmark" title="1위"></span>' : ''}</td>
-        <td>${s.played}</td><td>${s.wins}</td><td>${s.losses}</td>
+        <td>${s.played}</td><td>${s.wins}</td><td>${s.draws}</td><td>${s.losses}</td>
         <td>${s.played ? (s.winRate * 100).toFixed(0) + '%' : '–'}</td>
         <td>${s.setsWon}-${s.setsLost}</td>
         <td>${diff(s.gamesWon - s.gamesLost)}</td>
         <td class="pts">${s.points}</td>
         <td class="l"><span class="form">${s.recent.slice().reverse().map((r) => `<span class="wl ${r}">${r}</span>`).join('') || '<span class="hint">–</span>'}</span></td>
       </tr>`).join('')}</tbody></table></div>`;
-    $('rule-hint').textContent = `승리 ${state.settings.winPoints}점 · 패배 ${state.settings.lossPoints}점. 승점 → 승률 → 게임 득실차 → 세트 득실차 순으로 정렬합니다.`;
+    $('rule-hint').textContent = `승리 ${state.settings.winPoints}점 · 무승부 ${state.settings.drawPoints}점 · 패배 ${state.settings.lossPoints}점. 승점 → 승률 → 게임 득실차 → 세트 득실차 순으로 정렬합니다.`;
   }
 
   function fillSelect(sel, placeholder, keep) {
@@ -467,7 +473,8 @@ header .wrap { position: relative; }
   }
 
   const monthLabel = (m) => `${m.slice(0, 4)}년 ${Number(m.slice(5, 7))}월`;
-  const rec = (r) => `<span class="rec"><span class="w">${r.wins}승</span> <span class="l">${r.losses}패</span></span>`;
+  const rec = (r) => `<span class="rec"><span class="w">${r.wins}승</span>${r.draws ? ` <span class="d">${r.draws}무</span>` : ''} <span class="l">${r.losses}패</span></span>`;
+  const wdl = (r) => (r.draws ? `${r.wins}-${r.draws}-${r.losses}` : `${r.wins}-${r.losses}`);
   const pct = (r) => (r.played ? Math.round((r.wins / r.played) * 100) + '%' : '–');
   const signed = (n) => `<span class="${n > 0 ? 'pos' : n < 0 ? 'neg' : ''}">${n > 0 ? '+' : ''}${n}</span>`;
 
@@ -478,7 +485,7 @@ header .wrap { position: relative; }
     if (!id) { el.innerHTML = '<div class="panel empty"><strong>선수를 고르세요</strong>순위표에서 이름을 눌러도 됩니다.</div>'; return; }
     const d = R.memberDetail(id, state.matches);
     if (!d.total.played) { el.innerHTML = `<div class="panel empty"><strong>${esc(memberName(id))} 선수의 경기 기록이 아직 없습니다</strong>첫 경기를 입력하면 여기에 기록이 쌓입니다.</div>`; return; }
-    const streak = d.streak ? `${d.streak.count}연${d.streak.type === 'W' ? '승' : '패'}` : '–';
+    const streak = d.streak ? (d.streak.type === 'D' ? `${d.streak.count}연속 무` : `${d.streak.count}연${d.streak.type === 'W' ? '승' : '패'}`) : '–';
     const monthRank = (m) => {
       const ms = R.filterMatches(state.matches, { month: m });
       const row = R.computeStandings(state.members, ms, state.settings).filter((s) => s.played).find((s) => s.id === id);
@@ -491,9 +498,9 @@ header .wrap { position: relative; }
       .slice(0, 5);
     el.innerHTML = `
       <div class="tiles">
-        <div class="tile"><div class="k">전체 전적</div><div class="v">${d.total.wins}-${d.total.losses}</div><div class="s">${d.total.played}경기 · 승률 ${pct(d.total)}</div></div>
-        <div class="tile"><div class="k">단식</div><div class="v">${d.singles.wins}-${d.singles.losses}</div><div class="s">승률 ${pct(d.singles)}</div></div>
-        <div class="tile"><div class="k">복식</div><div class="v">${d.doubles.wins}-${d.doubles.losses}</div><div class="s">승률 ${pct(d.doubles)}</div></div>
+        <div class="tile"><div class="k">전체 전적</div><div class="v">${wdl(d.total)}</div><div class="s">${d.total.played}경기 · 승률 ${pct(d.total)}</div></div>
+        <div class="tile"><div class="k">단식</div><div class="v">${wdl(d.singles)}</div><div class="s">승률 ${pct(d.singles)}</div></div>
+        <div class="tile"><div class="k">복식</div><div class="v">${wdl(d.doubles)}</div><div class="s">승률 ${pct(d.doubles)}</div></div>
         <div class="tile"><div class="k">게임 득실</div><div class="v">${signed(d.total.gamesWon - d.total.gamesLost)}</div><div class="s">${d.total.gamesWon}득 ${d.total.gamesLost}실</div></div>
         <div class="tile"><div class="k">현재 흐름</div><div class="v">${streak}</div><div class="s">최다 연승 ${d.bestWinStreak}</div></div>
       </div>
@@ -504,8 +511,8 @@ header .wrap { position: relative; }
         <tbody>${d.opponents.map((o) => `<tr>
           <td class="l name"><button type="button" class="namelink" data-player="${esc(o.id)}">${esc(memberName(o.id))}</button></td>
           <td>${rec(o.total)}</td><td>${pct(o.total)}</td>
-          <td>${o.singles.played ? `${o.singles.wins}-${o.singles.losses}` : '–'}</td>
-          <td>${o.doubles.played ? `${o.doubles.wins}-${o.doubles.losses}` : '–'}</td>
+          <td>${o.singles.played ? wdl(o.singles) : '–'}</td>
+          <td>${o.doubles.played ? wdl(o.doubles) : '–'}</td>
           <td>${signed(o.total.gamesWon - o.total.gamesLost)}</td></tr>`).join('')}</tbody>
       </table></div>
       <p class="hint">복식은 상대 두 명 각각과의 전적에 함께 반영됩니다.</p>
@@ -567,7 +574,7 @@ header .wrap { position: relative; }
       ? `<button class="btn danger" data-del-confirm="${esc(m.id)}">삭제 확인</button><button class="btn ghost" data-del-cancel>취소</button>`
       : editBtn + `<button class="btn ghost" data-del="${esc(m.id)}">삭제</button>`;
     return `<article class="board">${line(m.teamA, 'A')}${line(m.teamB, 'B')}
-      <div class="meta"><span>${showDate ? esc(m.date) + ' · ' : ''}${m.teamA.length > 1 ? '복식' : '단식'}${by}</span><span class="acts">${acts}</span></div></article>`;
+      <div class="meta"><span>${showDate ? esc(m.date) + ' · ' : ''}${m.teamA.length > 1 ? '복식' : '단식'}${r.winner === 'D' ? ' · 무승부' : ''}${by}</span><span class="acts">${acts}</span></div></article>`;
   }
 
   function renderMembers() {
@@ -578,6 +585,7 @@ header .wrap { position: relative; }
       ? `<button type="button" data-rm="${esc(m.id)}" aria-label="${esc(m.name)} 삭제" title="삭제">×</button>` : ''}</li>`).join('');
     if (document.activeElement !== $('s-win')) $('s-win').value = state.settings.winPoints;
     if (document.activeElement !== $('s-loss')) $('s-loss').value = state.settings.lossPoints;
+    if (document.activeElement !== $('s-draw')) $('s-draw').value = state.settings.drawPoints;
   }
 
   function applyWriteState() {
@@ -594,7 +602,7 @@ header .wrap { position: relative; }
     const [mem, mat, set] = await Promise.all([
       state.sb.from('members').select('id,name').is('deleted_at', null).order('name'),
       state.sb.from('matches').select('id,played_on,team_a,team_b,sets,entered_by,created_at,updated_at').is('deleted_at', null),
-      state.sb.from('league_settings').select('win_points,loss_points').eq('id', 1).maybeSingle(),
+      state.sb.from('league_settings').select('win_points,draw_points,loss_points').eq('id', 1).maybeSingle(),
     ]);
     const err = mem.error || mat.error || set.error;
     if (err) { setStatus('기록을 불러오지 못했습니다. 인터넷 연결을 확인하고 새로고침하세요.', true); return; }
@@ -604,7 +612,7 @@ header .wrap { position: relative; }
       sets: (x.sets || []).map((v) => [Number(v.a), Number(v.b)]),
       enteredBy: x.entered_by, createdAt: Date.parse(x.created_at) || 0, edited: !!x.updated_at,
     })).filter((m) => m.teamA.length && m.teamB.length && m.sets.length);
-    if (set.data) state.settings = { winPoints: set.data.win_points, lossPoints: set.data.loss_points };
+    if (set.data) state.settings = { winPoints: set.data.win_points, drawPoints: set.data.draw_points ?? R.DEFAULT_SETTINGS.drawPoints, lossPoints: set.data.loss_points };
     state.loaded = true;
     if (/불러오지 못했습니다/.test($('status').textContent)) setStatus('');
     renderAll();
@@ -684,8 +692,12 @@ header .wrap { position: relative; }
     if (!$('f-score').value.trim()) { p.textContent = ''; p.className = 'preview'; return; }
     try {
       const f = readForm();
-      const w = f.r.winner === 'A' ? f.teamA : f.teamB;
-      p.textContent = `${teamName(w)} 승리 · 세트 ${Math.max(f.r.setsA, f.r.setsB)}-${Math.min(f.r.setsA, f.r.setsB)}`;
+      if (f.r.winner === 'D') {
+        p.textContent = `무승부 · 게임 ${f.r.gamesA}-${f.r.gamesB} · 양쪽 모두 승점 ${state.settings.drawPoints}점`;
+      } else {
+        const w = f.r.winner === 'A' ? f.teamA : f.teamB;
+        p.textContent = `${teamName(w)} 승리 · 세트 ${Math.max(f.r.setsA, f.r.setsB)}-${Math.min(f.r.setsA, f.r.setsB)}`;
+      }
       p.className = 'preview ok';
     } catch (e) { p.textContent = e.message; p.className = 'preview err'; }
   }
@@ -805,9 +817,9 @@ header .wrap { position: relative; }
   });
   $('settings-form').addEventListener('submit', async (ev) => {
     ev.preventDefault();
-    const w = Number($('s-win').value), l = Number($('s-loss').value);
-    if (!Number.isInteger(w) || !Number.isInteger(l) || w < l || l < 0 || w > 10) { setStatus(ERRORS.bad_points, true); return; }
-    if (await rpc('set_points', { p_win: w, p_loss: l })) setStatus('승점 규칙을 저장했습니다.');
+    const w = Number($('s-win').value), d = Number($('s-draw').value), l = Number($('s-loss').value);
+    if (![w, d, l].every(Number.isInteger) || w < d || d < l || l < 0 || w > 10) { setStatus(ERRORS.bad_points, true); return; }
+    if (await rpc('set_points', { p_win: w, p_draw: d, p_loss: l })) setStatus('승점 규칙을 저장했습니다.');
   });
   $('newpin-form').addEventListener('submit', async (ev) => {
     ev.preventDefault();

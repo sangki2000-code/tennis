@@ -132,3 +132,24 @@ begin
   if v_n = 0 then raise exception ''match_not_found''; end if;
   return jsonb_build_object(''ok'', true, ''id'', p_id);
 end ';
+
+-- 무승부 지원 (2026-10-14 추가): 동점 세트(예: 5-5) 허용, 무승부 승점 설정
+alter table public.league_settings add column if not exists draw_points int not null default 1 check (draw_points between 0 and 10);
+
+create or replace function private.check_match(p_played_on date, p_team_a uuid[], p_team_b uuid[], p_sets jsonb) returns void
+language plpgsql security definer set search_path = '' as '
+declare v_all uuid[]; s jsonb; v_a int; v_b int;
+begin
+  if p_played_on is null or p_played_on > current_date + 1 then raise exception ''bad_date''; end if;
+  if cardinality(p_team_a) not in (1, 2) or cardinality(p_team_a) <> cardinality(p_team_b) then raise exception ''bad_teams''; end if;
+  v_all := p_team_a || p_team_b;
+  if (select count(distinct x) from unnest(v_all) x) <> cardinality(v_all) then raise exception ''duplicate_player''; end if;
+  if (select count(*) from public.members where id = any(v_all) and deleted_at is null) <> cardinality(v_all) then raise exception ''unknown_player''; end if;
+  if jsonb_typeof(p_sets) <> ''array'' or jsonb_array_length(p_sets) not between 1 and 5 then raise exception ''bad_score''; end if;
+  for s in select * from jsonb_array_elements(p_sets) loop
+    v_a := (s->>''a'')::int; v_b := (s->>''b'')::int;
+    if v_a is null or v_b is null or v_a < 0 or v_b < 0 or v_a > 99 or v_b > 99 then raise exception ''bad_score''; end if;
+  end loop;
+end ';
+-- club_add_match / club_update_match 는 위 검사를 private.check_match 호출로 바꿨습니다(동점 세트 허용).
+-- club_set_points(p_pin, p_win, p_draw, p_loss): 승리 >= 무승부 >= 패배 를 검사합니다.
