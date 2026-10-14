@@ -385,7 +385,7 @@ header .wrap { position: relative; }
 
   const state = {
     sb: null, pin: store.get('club_pin'), pinOk: false,
-    loaded: false, members: [], matches: [], settings: Object.assign({}, R.DEFAULT_SETTINGS), pendingDelete: null, editingId: null,
+    loaded: false, members: [], matches: [], settings: Object.assign({}, R.DEFAULT_SETTINGS), pendingDelete: null, editingId: null, pendingEdit: null,
   };
 
   // ---------- 탭 ----------
@@ -559,9 +559,10 @@ header .wrap { position: relative; }
     };
     const by = (m.enteredBy ? ` · 입력: ${esc(memberName(m.enteredBy))}` : '') + (m.edited ? ' · 수정됨' : '');
     const confirming = state.pendingDelete === m.id;
-    const acts = (readonly || !state.pinOk) ? '' : confirming
+    const editBtn = `<button class="btn ghost" data-edit="${esc(m.id)}">수정</button>`;
+    const acts = readonly ? editBtn : (confirming && state.pinOk)
       ? `<button class="btn danger" data-del-confirm="${esc(m.id)}">삭제 확인</button><button class="btn ghost" data-del-cancel>취소</button>`
-      : `<button class="btn ghost" data-edit="${esc(m.id)}">수정</button><button class="btn ghost" data-del="${esc(m.id)}">삭제</button>`;
+      : editBtn + `<button class="btn ghost" data-del="${esc(m.id)}">삭제</button>`;
     return `<article class="board">${line(m.teamA, 'A')}${line(m.teamB, 'B')}
       <div class="meta"><span>${readonly ? esc(m.date) + ' · ' : ''}${m.teamA.length > 1 ? '복식' : '단식'}${by}</span><span class="acts">${acts}</span></div></article>`;
   }
@@ -640,7 +641,14 @@ header .wrap { position: relative; }
     if (err) { setStatus(ERRORS[err] || '확인하지 못했습니다. 잠시 후 다시 시도하세요.', true); return; }
     state.pin = pin; state.pinOk = true; store.set('club_pin', pin);
     $('pin-input').value = ''; setStatus(''); renderAll();
+    if (state.pendingEdit) { const id = state.pendingEdit; state.pendingEdit = null; startEdit(id); }
   });
+
+  function askPin(msg) {
+    setStatus(msg, true);
+    window.scrollTo(0, 0);
+    try { $('pin-input').focus({ preventScroll: true }); } catch (e) {}
+  }
   $('pin-forget').addEventListener('click', () => {
     state.pin = null; state.pinOk = false; store.set('club_pin', null); renderAll();
   });
@@ -744,11 +752,18 @@ header .wrap { position: relative; }
   document.addEventListener('click', (ev) => {
     const b = ev.target.closest('.namelink[data-player]');
     if (b) openPlayer(b.dataset.player);
+    const e = ev.target.closest('button[data-edit]');
+    if (e) {
+      if (state.pinOk) startEdit(e.dataset.edit);
+      else { state.pendingEdit = e.dataset.edit; askPin('수정하려면 먼저 위의 클럽 PIN을 입력하세요. 확인하면 바로 수정 화면으로 넘어갑니다.'); }
+    }
   });
   $('log').addEventListener('click', async (ev) => {
-    const t = ev.target.closest('button'); if (!t) return;
-    if (t.dataset.edit) { startEdit(t.dataset.edit); }
-    else if (t.dataset.del) { state.pendingDelete = t.dataset.del; renderLog(); }
+    const t = ev.target.closest('button'); if (!t || t.dataset.edit) return;
+    if (t.dataset.del) {
+      if (!state.pinOk) { askPin('삭제하려면 먼저 위의 클럽 PIN을 입력하세요.'); return; }
+      state.pendingDelete = t.dataset.del; renderLog();
+    }
     else if (t.hasAttribute('data-del-cancel')) { state.pendingDelete = null; renderLog(); }
     else if (t.dataset.delConfirm) {
       const id = t.dataset.delConfirm; state.pendingDelete = null;
