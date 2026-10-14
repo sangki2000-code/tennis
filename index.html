@@ -69,6 +69,8 @@ nav.tabs button:focus-visible, button:focus-visible, input:focus-visible, select
 
 main .wrap { padding-block: 24px 48px; display: grid; gap: 20px; }
 section[role="tabpanel"] { display: grid; gap: 16px; min-width: 0; }
+main .wrap, section[role="tabpanel"] { grid-template-columns: minmax(0, 1fr); }
+section[role="tabpanel"] > * { min-width: 0; }
 h2 { font-family: var(--font-display); font-weight: 600; font-size: 26px; margin: 0; line-height: 1.1; }
 .hint { color: var(--muted); font-size: 13px; margin: 0; }
 .notice { border: 1px solid var(--line); background: var(--surface); padding: 12px 14px; border-radius: 8px; font-size: 14px; }
@@ -139,6 +141,18 @@ fieldset { border: none; padding: 0; margin: 0; display: flex; gap: 8px; flex-wr
 .empty { text-align: center; padding: 28px 16px; color: var(--muted); }
 .empty strong { display: block; color: var(--fg); font-size: 16px; margin-bottom: 4px; }
 @media (prefers-reduced-motion: no-preference) { .board { transition: border-color .15s; } .board:hover { border-color: var(--court); } }
+.filters { display: flex; flex-wrap: wrap; gap: 10px; }
+.filters .field { flex: 0 1 200px; }
+.namelink { font: inherit; font-weight: 600; color: var(--fg); background: none; border: none; padding: 0; cursor: pointer; text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
+.namelink:hover { text-decoration-color: var(--court); color: var(--court); }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.tile .k { font-size: 12px; color: var(--muted); font-weight: 600; letter-spacing: .04em; }
+.tile .v { font: 700 26px var(--font-display); font-variant-numeric: tabular-nums; line-height: 1.15; }
+.tile .s { font-size: 12px; color: var(--muted); }
+h3.sec { font: 600 19px var(--font-display); margin: 6px 0 0; letter-spacing: .02em; }
+table.small { min-width: 420px; }
+.rec .w { color: var(--win); font-weight: 600; } .rec .l { color: var(--loss); font-weight: 600; }
 .pinbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
 .pinbar .lbl { font-weight: 600; font-size: 14px; color: var(--fg); }
 .pinbar input { width: 9em; flex: 0 0 auto; }
@@ -154,6 +168,7 @@ fieldset { border: none; padding: 0; margin: 0; display: flex; gap: 8px; flex-wr
     <p class="sub">경기 결과를 입력하면 모두의 순위가 바로 갱신됩니다.</p>
     <nav class="tabs" role="tablist">
       <button role="tab" id="tab-rank" aria-controls="p-rank" aria-selected="true">순위</button>
+      <button role="tab" id="tab-player" aria-controls="p-player" aria-selected="false">선수 기록</button>
       <button role="tab" id="tab-add" aria-controls="p-add" aria-selected="false">결과 입력</button>
       <button role="tab" id="tab-log" aria-controls="p-log" aria-selected="false">경기 기록</button>
       <button role="tab" id="tab-mem" aria-controls="p-mem" aria-selected="false">멤버 · 설정</button>
@@ -179,10 +194,37 @@ fieldset { border: none; padding: 0; margin: 0; display: flex; gap: 8px; flex-wr
 
     <section role="tabpanel" id="p-rank" aria-labelledby="tab-rank">
       <div>
-        <h2>현재 순위</h2>
+        <h2 id="rank-title">전체 순위</h2>
         <p class="hint" id="rule-hint">승점 → 승률 → 게임 득실차 → 세트 득실차 순으로 정렬합니다.</p>
       </div>
+      <div class="filters">
+        <div class="field">
+          <label for="rank-month">기간</label>
+          <select id="rank-month"><option value="">전체 기간</option></select>
+        </div>
+        <div class="field">
+          <label for="rank-type">경기 유형</label>
+          <select id="rank-type">
+            <option value="">단식 + 복식</option>
+            <option value="single">단식만</option>
+            <option value="double">복식만</option>
+          </select>
+        </div>
+      </div>
       <div id="standings"></div>
+      <p class="hint">이름을 누르면 그 선수의 상세 기록과 상대 전적을 볼 수 있습니다.</p>
+    </section>
+
+    <section role="tabpanel" id="p-player" aria-labelledby="tab-player" hidden>
+      <div>
+        <h2>선수 기록</h2>
+        <p class="hint">단식·복식 성적, 상대 전적, 복식 파트너, 월별 성적을 보여줍니다.</p>
+      </div>
+      <div class="field" style="max-width:280px">
+        <label for="player-select">선수</label>
+        <select id="player-select"></select>
+      </div>
+      <div id="player-detail"></div>
     </section>
 
     <section role="tabpanel" id="p-add" aria-labelledby="tab-add" hidden>
@@ -322,7 +364,7 @@ fieldset { border: none; padding: 0; margin: 0; display: flex; gap: 8px; flex-wr
   };
 
   // ---------- 탭 ----------
-  const tabs = ['rank', 'add', 'log', 'mem'];
+  const tabs = ['rank', 'player', 'add', 'log', 'mem'];
   function showTab(key) {
     tabs.forEach((k) => {
       $('tab-' + k).setAttribute('aria-selected', String(k === key));
@@ -351,13 +393,21 @@ fieldset { border: none; padding: 0; margin: 0; display: flex; gap: 8px; flex-wr
       el.innerHTML = '<div class="panel empty"><strong>아직 멤버가 없습니다</strong>“멤버 · 설정” 탭에서 멤버를 추가한 뒤 경기 결과를 입력하면 여기에 순위가 나타납니다.</div>';
       return;
     }
-    const rows = R.computeStandings(state.members, state.matches, state.settings);
+    const month = $('rank-month').value, type = $('rank-type').value;
+    $('rank-title').textContent = (month ? monthLabel(month) : '전체') + ' 순위' + (type === 'single' ? ' · 단식' : type === 'double' ? ' · 복식' : '');
+    const filtered = R.filterMatches(state.matches, { month, type });
+    if (!filtered.length && (month || type)) {
+      el.innerHTML = '<div class="panel empty"><strong>이 기간에는 경기 기록이 없습니다</strong>기간이나 경기 유형을 바꿔 보세요.</div>';
+      return;
+    }
+    const rows = R.computeStandings(state.members, filtered, state.settings)
+      .filter((s) => s.played || !(month || type));
     const diff = (n) => `<span class="${n > 0 ? 'pos' : n < 0 ? 'neg' : ''}">${n > 0 ? '+' : ''}${n}</span>`;
     el.innerHTML = `<div class="table-scroll"><table>
       <thead><tr><th>순위</th><th class="l">이름</th><th>경기</th><th>승</th><th>패</th><th>승률</th><th>세트</th><th>게임 득실</th><th>승점</th><th class="l">최근 5경기</th></tr></thead>
       <tbody>${rows.map((s) => `<tr>
         <td class="rank">${s.rank}</td>
-        <td class="l name">${esc(s.name)}${s.rank === 1 && s.played ? '<span class="ballmark" title="1위"></span>' : ''}</td>
+        <td class="l name"><button type="button" class="namelink" data-player="${esc(s.id)}">${esc(s.name)}</button>${s.rank === 1 && s.played ? '<span class="ballmark" title="1위"></span>' : ''}</td>
         <td>${s.played}</td><td>${s.wins}</td><td>${s.losses}</td>
         <td>${s.played ? (s.winRate * 100).toFixed(0) + '%' : '–'}</td>
         <td>${s.setsWon}-${s.setsLost}</td>
@@ -379,6 +429,81 @@ fieldset { border: none; padding: 0; margin: 0; display: flex; gap: 8px; flex-wr
     fillSelect($('b1'), '선수 선택'); fillSelect($('b2'), '파트너 선택');
     fillSelect($('f-by'), '선택 안 함', $('f-by').value || store.get('entered_by') || '');
     fillSelect($('log-filter'), '전체 멤버');
+    fillSelect($('player-select'), '선수를 고르세요', $('player-select').value || store.get('player') || '');
+    const rm = $('rank-month'), keepM = rm.value;
+    const months = R.listMonths(state.matches);
+    const cur = today().slice(0, 7);
+    if (!months.includes(cur)) months.unshift(cur);
+    rm.innerHTML = '<option value="">전체 기간</option>' + months.map((m) => `<option value="${m}">${monthLabel(m)}</option>`).join('');
+    if (months.includes(keepM)) rm.value = keepM;
+  }
+
+  const monthLabel = (m) => `${m.slice(0, 4)}년 ${Number(m.slice(5, 7))}월`;
+  const rec = (r) => `<span class="rec"><span class="w">${r.wins}승</span> <span class="l">${r.losses}패</span></span>`;
+  const pct = (r) => (r.played ? Math.round((r.wins / r.played) * 100) + '%' : '–');
+  const signed = (n) => `<span class="${n > 0 ? 'pos' : n < 0 ? 'neg' : ''}">${n > 0 ? '+' : ''}${n}</span>`;
+
+  function renderPlayer() {
+    const el = $('player-detail');
+    const id = $('player-select').value;
+    if (!state.loaded) { el.innerHTML = '<div class="panel empty">기록을 불러오는 중…</div>'; return; }
+    if (!id) { el.innerHTML = '<div class="panel empty"><strong>선수를 고르세요</strong>순위표에서 이름을 눌러도 됩니다.</div>'; return; }
+    const d = R.memberDetail(id, state.matches);
+    if (!d.total.played) { el.innerHTML = `<div class="panel empty"><strong>${esc(memberName(id))} 선수의 경기 기록이 아직 없습니다</strong>첫 경기를 입력하면 여기에 기록이 쌓입니다.</div>`; return; }
+    const streak = d.streak ? `${d.streak.count}연${d.streak.type === 'W' ? '승' : '패'}` : '–';
+    const monthRank = (m) => {
+      const ms = R.filterMatches(state.matches, { month: m });
+      const row = R.computeStandings(state.members, ms, state.settings).filter((s) => s.played).find((s) => s.id === id);
+      const n = R.computeStandings(state.members, ms, state.settings).filter((s) => s.played).length;
+      return row ? `${row.rank}위 <span class="hint">/ ${n}명</span>` : '–';
+    };
+    const recent = state.matches
+      .filter((m) => m.teamA.includes(id) || m.teamB.includes(id))
+      .sort((x, y) => (y.date || '').localeCompare(x.date || '') || (y.createdAt || 0) - (x.createdAt || 0))
+      .slice(0, 5);
+    el.innerHTML = `
+      <div class="tiles">
+        <div class="tile"><div class="k">전체 전적</div><div class="v">${d.total.wins}-${d.total.losses}</div><div class="s">${d.total.played}경기 · 승률 ${pct(d.total)}</div></div>
+        <div class="tile"><div class="k">단식</div><div class="v">${d.singles.wins}-${d.singles.losses}</div><div class="s">승률 ${pct(d.singles)}</div></div>
+        <div class="tile"><div class="k">복식</div><div class="v">${d.doubles.wins}-${d.doubles.losses}</div><div class="s">승률 ${pct(d.doubles)}</div></div>
+        <div class="tile"><div class="k">게임 득실</div><div class="v">${signed(d.total.gamesWon - d.total.gamesLost)}</div><div class="s">${d.total.gamesWon}득 ${d.total.gamesLost}실</div></div>
+        <div class="tile"><div class="k">현재 흐름</div><div class="v">${streak}</div><div class="s">최다 연승 ${d.bestWinStreak}</div></div>
+      </div>
+
+      <h3 class="sec">상대 전적</h3>
+      <div class="table-scroll"><table class="small">
+        <thead><tr><th class="l">상대</th><th>전체</th><th>승률</th><th>단식</th><th>복식</th><th>게임 득실</th></tr></thead>
+        <tbody>${d.opponents.map((o) => `<tr>
+          <td class="l name"><button type="button" class="namelink" data-player="${esc(o.id)}">${esc(memberName(o.id))}</button></td>
+          <td>${rec(o.total)}</td><td>${pct(o.total)}</td>
+          <td>${o.singles.played ? `${o.singles.wins}-${o.singles.losses}` : '–'}</td>
+          <td>${o.doubles.played ? `${o.doubles.wins}-${o.doubles.losses}` : '–'}</td>
+          <td>${signed(o.total.gamesWon - o.total.gamesLost)}</td></tr>`).join('')}</tbody>
+      </table></div>
+      <p class="hint">복식은 상대 두 명 각각과의 전적에 함께 반영됩니다.</p>
+
+      ${d.partners.length ? `<h3 class="sec">복식 파트너</h3>
+      <div class="table-scroll"><table class="small">
+        <thead><tr><th class="l">파트너</th><th>경기</th><th>전적</th><th>승률</th><th>게임 득실</th></tr></thead>
+        <tbody>${d.partners.map((p) => `<tr>
+          <td class="l name"><button type="button" class="namelink" data-player="${esc(p.id)}">${esc(memberName(p.id))}</button></td>
+          <td>${p.played}</td><td>${rec(p)}</td><td>${pct(p)}</td><td>${signed(p.gamesWon - p.gamesLost)}</td></tr>`).join('')}</tbody>
+      </table></div>` : ''}
+
+      <h3 class="sec">월별 성적</h3>
+      <div class="table-scroll"><table class="small">
+        <thead><tr><th class="l">월</th><th>경기</th><th>전적</th><th>승률</th><th>그 달 순위</th></tr></thead>
+        <tbody>${d.months.map((m) => `<tr>
+          <td class="l">${monthLabel(m.month)}</td><td>${m.played}</td><td>${rec(m)}</td><td>${pct(m)}</td><td>${monthRank(m.month)}</td></tr>`).join('')}</tbody>
+      </table></div>
+
+      <h3 class="sec">최근 경기</h3>
+      <div class="day">${recent.map((m) => boardHtml(m, true)).join('')}</div>`;
+  }
+
+  function openPlayer(id) {
+    $('player-select').value = id; store.set('player', id);
+    showTab('player'); renderPlayer(); window.scrollTo(0, 0);
   }
 
   function renderLog() {
@@ -397,7 +522,7 @@ fieldset { border: none; padding: 0; margin: 0; display: flex; gap: 8px; flex-wr
     el.innerHTML = [...byDay].map(([date, ms]) => `<div class="day"><h3>${esc(date)}</h3>${ms.map(boardHtml).join('')}</div>`).join('');
   }
 
-  function boardHtml(m) {
+  function boardHtml(m, readonly) {
     let r; try { r = R.decideWinner(m.sets); } catch (e) { return ''; }
     const line = (ids, side) => {
       const won = r.winner === side;
@@ -409,11 +534,11 @@ fieldset { border: none; padding: 0; margin: 0; display: flex; gap: 8px; flex-wr
     };
     const by = m.enteredBy ? ` · 입력: ${esc(memberName(m.enteredBy))}` : '';
     const confirming = state.pendingDelete === m.id;
-    const acts = !state.pinOk ? '' : confirming
+    const acts = (readonly || !state.pinOk) ? '' : confirming
       ? `<button class="btn danger" data-del-confirm="${esc(m.id)}">삭제 확인</button><button class="btn ghost" data-del-cancel>취소</button>`
       : `<button class="btn ghost" data-del="${esc(m.id)}">삭제</button>`;
     return `<article class="board">${line(m.teamA, 'A')}${line(m.teamB, 'B')}
-      <div class="meta"><span>${m.teamA.length > 1 ? '복식' : '단식'}${by}</span><span class="acts">${acts}</span></div></article>`;
+      <div class="meta"><span>${readonly ? esc(m.date) + ' · ' : ''}${m.teamA.length > 1 ? '복식' : '단식'}${by}</span><span class="acts">${acts}</span></div></article>`;
   }
 
   function renderMembers() {
@@ -433,7 +558,7 @@ fieldset { border: none; padding: 0; margin: 0; display: flex; gap: 8px; flex-wr
       .forEach((el) => { el.disabled = !state.pinOk; });
   }
 
-  function renderAll() { renderSelects(); renderStandings(); renderLog(); renderMembers(); updatePreview(); applyWriteState(); }
+  function renderAll() { renderSelects(); renderStandings(); renderPlayer(); renderLog(); renderMembers(); updatePreview(); applyWriteState(); }
 
   // ---------- 데이터 ----------
   async function loadAll() {
@@ -547,6 +672,13 @@ fieldset { border: none; padding: 0; margin: 0; display: flex; gap: 8px; flex-wr
   });
 
   $('log-filter').addEventListener('change', renderLog);
+  $('rank-month').addEventListener('change', renderStandings);
+  $('rank-type').addEventListener('change', renderStandings);
+  $('player-select').addEventListener('change', () => { store.set('player', $('player-select').value || null); renderPlayer(); });
+  document.addEventListener('click', (ev) => {
+    const b = ev.target.closest('.namelink[data-player]');
+    if (b) openPlayer(b.dataset.player);
+  });
   $('log').addEventListener('click', async (ev) => {
     const t = ev.target.closest('button'); if (!t) return;
     if (t.dataset.del) { state.pendingDelete = t.dataset.del; renderLog(); }

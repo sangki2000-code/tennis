@@ -98,5 +98,74 @@
     return list;
   }
 
-  return { DEFAULT_SETTINGS, parseScore, decideWinner, formatScore, computeStandings };
+  // 'YYYY-MM' 목록 (최신순)
+  function listMonths(matches) {
+    return [...new Set(matches.map((m) => (m.date || '').slice(0, 7)).filter(Boolean))].sort().reverse();
+  }
+
+  // filter: { month: 'YYYY-MM' | '', type: 'single' | 'double' | '' }
+  function filterMatches(matches, filter) {
+    const f = filter || {};
+    return matches.filter((m) =>
+      (!f.month || (m.date || '').startsWith(f.month)) &&
+      (!f.type || (f.type === 'double') === (m.teamA.length > 1)));
+  }
+
+  function newRecord() { return { played: 0, wins: 0, losses: 0, gamesWon: 0, gamesLost: 0 }; }
+  function addResult(rec, won, gw, gl) {
+    rec.played++; if (won) rec.wins++; else rec.losses++;
+    rec.gamesWon += gw; rec.gamesLost += gl;
+  }
+
+  // 한 멤버의 상세 기록: 단식/복식 성적, 상대 전적, 파트너 기록, 월별 성적, 연승/연패
+  function memberDetail(memberId, matches) {
+    const ordered = [...matches].sort((x, y) => (x.date || '').localeCompare(y.date || '') || (x.createdAt || 0) - (y.createdAt || 0));
+    const total = newRecord(), singles = newRecord(), doubles = newRecord();
+    const opponents = new Map(), partners = new Map(), months = new Map();
+    const history = [];
+    for (const m of ordered) {
+      const side = m.teamA.includes(memberId) ? 'A' : m.teamB.includes(memberId) ? 'B' : null;
+      if (!side) continue;
+      const r = decideWinner(m.sets);
+      const won = r.winner === side;
+      const gw = side === 'A' ? r.gamesA : r.gamesB, gl = side === 'A' ? r.gamesB : r.gamesA;
+      const mine = side === 'A' ? m.teamA : m.teamB, theirs = side === 'A' ? m.teamB : m.teamA;
+      const isDouble = m.teamA.length > 1;
+      addResult(total, won, gw, gl);
+      addResult(isDouble ? doubles : singles, won, gw, gl);
+      for (const id of theirs) {
+        if (!opponents.has(id)) opponents.set(id, { id, total: newRecord(), singles: newRecord(), doubles: newRecord() });
+        const o = opponents.get(id);
+        addResult(o.total, won, gw, gl);
+        addResult(isDouble ? o.doubles : o.singles, won, gw, gl);
+      }
+      for (const id of mine) {
+        if (id === memberId) continue;
+        if (!partners.has(id)) partners.set(id, Object.assign({ id }, newRecord()));
+        addResult(partners.get(id), won, gw, gl);
+      }
+      const mk = (m.date || '').slice(0, 7);
+      if (!months.has(mk)) months.set(mk, Object.assign({ month: mk }, newRecord()));
+      addResult(months.get(mk), won, gw, gl);
+      history.push(won ? 'W' : 'L');
+    }
+    let streak = null;
+    if (history.length) {
+      const last = history[history.length - 1];
+      let n = 0;
+      for (let i = history.length - 1; i >= 0 && history[i] === last; i--) n++;
+      streak = { type: last, count: n };
+    }
+    let best = 0, cur = 0;
+    for (const h of history) { cur = h === 'W' ? cur + 1 : 0; best = Math.max(best, cur); }
+    const byPlayed = (a, b) => (b.total ? b.total.played - a.total.played : b.played - a.played);
+    return {
+      total, singles, doubles, streak, bestWinStreak: best,
+      opponents: [...opponents.values()].sort(byPlayed),
+      partners: [...partners.values()].sort(byPlayed),
+      months: [...months.values()].sort((a, b) => b.month.localeCompare(a.month)),
+    };
+  }
+
+  return { DEFAULT_SETTINGS, parseScore, decideWinner, formatScore, computeStandings, listMonths, filterMatches, memberDetail };
 });
