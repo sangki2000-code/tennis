@@ -153,6 +153,8 @@ fieldset { border: none; padding: 0; margin: 0; display: flex; gap: 8px; flex-wr
 h3.sec { font: 600 19px var(--font-display); margin: 6px 0 0; letter-spacing: .02em; }
 table.small { min-width: 420px; }
 .rec .w { color: var(--win); font-weight: 600; } .rec .l { color: var(--loss); font-weight: 600; }
+.edit-banner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; border-color: var(--court); }
+.edit-banner span { font-weight: 600; }
 .pinbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
 .pinbar .lbl { font-weight: 600; font-size: 14px; color: var(--fg); }
 .pinbar input { width: 9em; flex: 0 0 auto; }
@@ -229,8 +231,12 @@ table.small { min-width: 420px; }
 
     <section role="tabpanel" id="p-add" aria-labelledby="tab-add" hidden>
       <div>
-        <h2>경기 결과 입력</h2>
+        <h2 id="add-title">경기 결과 입력</h2>
         <p class="hint">팀 A 기준으로 세트 스코어를 적어 주세요. 예: <code>6-4, 3-6, 7-6(5)</code></p>
+      </div>
+      <div class="notice edit-banner" id="edit-banner" hidden>
+        <span id="edit-desc"></span>
+        <button class="btn ghost" type="button" id="edit-cancel">수정 취소</button>
       </div>
       <div class="panel">
         <form id="match-form" autocomplete="off">
@@ -354,13 +360,14 @@ table.small { min-width: 420px; }
     bad_name: '이름은 1~20자로 입력하세요.',
     duplicate_member: '같은 이름의 멤버가 이미 있습니다.',
     member_has_matches: '경기 기록이 있는 멤버는 삭제할 수 없습니다.',
+    match_not_found: '이 경기는 이미 삭제되었습니다. 경기 기록을 다시 확인하세요.',
     bad_points: '승리 승점은 패배 승점보다 크거나 같아야 합니다. (0~10)',
     bad_new_pin: '새 PIN은 숫자 4~8자리로 입력하세요.',
   };
 
   const state = {
     sb: null, pin: store.get('club_pin'), pinOk: false,
-    loaded: false, members: [], matches: [], settings: Object.assign({}, R.DEFAULT_SETTINGS), pendingDelete: null,
+    loaded: false, members: [], matches: [], settings: Object.assign({}, R.DEFAULT_SETTINGS), pendingDelete: null, editingId: null,
   };
 
   // ---------- 탭 ----------
@@ -532,11 +539,11 @@ table.small { min-width: 420px; }
       }).join('');
       return `<div class="line ${won ? 'won' : ''}"><div class="who">${esc(teamName(ids))}${won ? '<span class="ballmark" title="승리"></span>' : ''}</div><div class="sets">${sets}</div></div>`;
     };
-    const by = m.enteredBy ? ` · 입력: ${esc(memberName(m.enteredBy))}` : '';
+    const by = (m.enteredBy ? ` · 입력: ${esc(memberName(m.enteredBy))}` : '') + (m.edited ? ' · 수정됨' : '');
     const confirming = state.pendingDelete === m.id;
     const acts = (readonly || !state.pinOk) ? '' : confirming
       ? `<button class="btn danger" data-del-confirm="${esc(m.id)}">삭제 확인</button><button class="btn ghost" data-del-cancel>취소</button>`
-      : `<button class="btn ghost" data-del="${esc(m.id)}">삭제</button>`;
+      : `<button class="btn ghost" data-edit="${esc(m.id)}">수정</button><button class="btn ghost" data-del="${esc(m.id)}">삭제</button>`;
     return `<article class="board">${line(m.teamA, 'A')}${line(m.teamB, 'B')}
       <div class="meta"><span>${readonly ? esc(m.date) + ' · ' : ''}${m.teamA.length > 1 ? '복식' : '단식'}${by}</span><span class="acts">${acts}</span></div></article>`;
   }
@@ -564,7 +571,7 @@ table.small { min-width: 420px; }
   async function loadAll() {
     const [mem, mat, set] = await Promise.all([
       state.sb.from('members').select('id,name').is('deleted_at', null).order('name'),
-      state.sb.from('matches').select('id,played_on,team_a,team_b,sets,entered_by,created_at').is('deleted_at', null),
+      state.sb.from('matches').select('id,played_on,team_a,team_b,sets,entered_by,created_at,updated_at').is('deleted_at', null),
       state.sb.from('league_settings').select('win_points,loss_points').eq('id', 1).maybeSingle(),
     ]);
     const err = mem.error || mat.error || set.error;
@@ -573,7 +580,7 @@ table.small { min-width: 420px; }
     state.matches = mat.data.map((x) => ({
       id: x.id, date: x.played_on, teamA: x.team_a || [], teamB: x.team_b || [],
       sets: (x.sets || []).map((v) => [Number(v.a), Number(v.b)]),
-      enteredBy: x.entered_by, createdAt: Date.parse(x.created_at) || 0,
+      enteredBy: x.entered_by, createdAt: Date.parse(x.created_at) || 0, edited: !!x.updated_at,
     })).filter((m) => m.teamA.length && m.teamB.length && m.sets.length);
     if (set.data) state.settings = { winPoints: set.data.win_points, lossPoints: set.data.loss_points };
     state.loaded = true;
@@ -659,17 +666,58 @@ table.small { min-width: 420px; }
     ev.preventDefault();
     let f; try { f = readForm(); } catch (e) { updatePreview(); return; }
     $('save-btn').disabled = true;
-    const ok = await rpc('add_match', {
+    const editing = state.editingId;
+    const args = {
       p_played_on: f.date, p_team_a: f.teamA, p_team_b: f.teamB,
       p_sets: f.sets.map(([a, b]) => ({ a, b })), p_entered_by: $('f-by').value || null,
-    });
+    };
+    const ok = editing ? await rpc('update_match', Object.assign({ p_id: editing }, args)) : await rpc('add_match', args);
     $('save-btn').disabled = !state.pinOk;
     if (ok) {
-      $('toast').textContent = `저장했습니다: ${teamName(f.teamA)} ${R.formatScore(f.sets)} ${teamName(f.teamB)}`;
-      $('f-score').value = ''; updatePreview();
-      setTimeout(() => { $('toast').textContent = ''; }, 4000);
+      const summary = `${teamName(f.teamA)} ${R.formatScore(f.sets)} ${teamName(f.teamB)}`;
+      if (editing) {
+        endEdit();
+        showTab('log');
+        setStatus('수정했습니다: ' + summary);
+        setTimeout(() => { if ($('status').textContent.startsWith('수정했습니다')) setStatus(''); }, 5000);
+      } else {
+        $('toast').textContent = '저장했습니다: ' + summary;
+        $('f-score').value = ''; updatePreview();
+        setTimeout(() => { $('toast').textContent = ''; }, 4000);
+      }
     }
   });
+
+  // ---------- 수정 ----------
+  function startEdit(id) {
+    const m = state.matches.find((x) => x.id === id);
+    if (!m) return;
+    state.editingId = id;
+    const dbl = m.teamA.length > 1;
+    $('t-double').checked = dbl; $('t-single').checked = !dbl; syncType();
+    $('a1').value = m.teamA[0]; $('b1').value = m.teamB[0];
+    $('a2').value = dbl ? m.teamA[1] : ''; $('b2').value = dbl ? m.teamB[1] : '';
+    $('f-date').value = m.date;
+    $('f-score').value = R.formatScore(m.sets);
+    $('f-by').value = m.enteredBy && state.members.some((x) => x.id === m.enteredBy) ? m.enteredBy : '';
+    $('edit-desc').textContent = `수정 중: ${m.date} · ${teamName(m.teamA)} vs ${teamName(m.teamB)}`;
+    $('edit-banner').hidden = false;
+    $('add-title').textContent = '경기 결과 수정';
+    $('save-btn').textContent = '수정 저장';
+    $('toast').textContent = '';
+    updatePreview(); showTab('add'); window.scrollTo(0, 0);
+  }
+  function endEdit() {
+    state.editingId = null;
+    $('edit-banner').hidden = true;
+    $('add-title').textContent = '경기 결과 입력';
+    $('save-btn').textContent = '결과 저장';
+    $('f-score').value = ''; $('f-date').value = today();
+    ['a1', 'a2', 'b1', 'b2'].forEach((k) => { $(k).value = ''; });
+    $('f-by').value = store.get('entered_by') || '';
+    updatePreview();
+  }
+  $('edit-cancel').addEventListener('click', () => { endEdit(); showTab('log'); });
 
   $('log-filter').addEventListener('change', renderLog);
   $('rank-month').addEventListener('change', renderStandings);
@@ -681,7 +729,8 @@ table.small { min-width: 420px; }
   });
   $('log').addEventListener('click', async (ev) => {
     const t = ev.target.closest('button'); if (!t) return;
-    if (t.dataset.del) { state.pendingDelete = t.dataset.del; renderLog(); }
+    if (t.dataset.edit) { startEdit(t.dataset.edit); }
+    else if (t.dataset.del) { state.pendingDelete = t.dataset.del; renderLog(); }
     else if (t.hasAttribute('data-del-cancel')) { state.pendingDelete = null; renderLog(); }
     else if (t.dataset.delConfirm) {
       const id = t.dataset.delConfirm; state.pendingDelete = null;

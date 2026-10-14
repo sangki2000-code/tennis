@@ -103,3 +103,32 @@ begin
 end ';
 
 alter publication supabase_realtime add table public.members, public.matches, public.league_settings;
+
+-- 경기 결과 수정 (2026-10-14 추가)
+alter table public.matches add column if not exists updated_at timestamptz;
+
+create or replace function public.club_update_match(p_pin text, p_id uuid, p_played_on date, p_team_a uuid[], p_team_b uuid[], p_sets jsonb, p_entered_by uuid default null)
+returns jsonb language plpgsql security definer set search_path = '' as '
+declare v_err text := private.pin_error(p_pin); v_all uuid[]; s jsonb; v_a int; v_b int; v_n int;
+begin
+  if v_err is not null then return jsonb_build_object(''error'', v_err); end if;
+  if not exists (select 1 from public.matches where id = p_id and deleted_at is null) then raise exception ''match_not_found''; end if;
+  if p_played_on is null or p_played_on > current_date + 1 then raise exception ''bad_date''; end if;
+  if cardinality(p_team_a) not in (1, 2) or cardinality(p_team_a) <> cardinality(p_team_b) then raise exception ''bad_teams''; end if;
+  v_all := p_team_a || p_team_b;
+  if (select count(distinct x) from unnest(v_all) x) <> cardinality(v_all) then raise exception ''duplicate_player''; end if;
+  if (select count(*) from public.members where id = any(v_all) and deleted_at is null) <> cardinality(v_all) then raise exception ''unknown_player''; end if;
+  if jsonb_typeof(p_sets) <> ''array'' or jsonb_array_length(p_sets) not between 1 and 5 then raise exception ''bad_score''; end if;
+  for s in select * from jsonb_array_elements(p_sets) loop
+    v_a := (s->>''a'')::int; v_b := (s->>''b'')::int;
+    if v_a is null or v_b is null or v_a < 0 or v_b < 0 or v_a > 99 or v_b > 99 or v_a = v_b then raise exception ''bad_score''; end if;
+  end loop;
+  update public.matches
+     set played_on = p_played_on, team_a = p_team_a, team_b = p_team_b,
+         sets = (select jsonb_agg(jsonb_build_object(''a'', (e->>''a'')::int, ''b'', (e->>''b'')::int)) from jsonb_array_elements(p_sets) e),
+         entered_by = coalesce(p_entered_by, entered_by), updated_at = now()
+   where id = p_id and deleted_at is null;
+  get diagnostics v_n = row_count;
+  if v_n = 0 then raise exception ''match_not_found''; end if;
+  return jsonb_build_object(''ok'', true, ''id'', p_id);
+end ';
