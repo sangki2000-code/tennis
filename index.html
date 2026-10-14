@@ -1,5 +1,13 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>클럽 테니스 랭킹</title>
-<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="테니스 클럽 경기 결과 입력과 실시간 순위">
+<meta property="og:type" content="website">
+<meta property="og:title" content="클럽 테니스 랭킹">
+<meta property="og:description" content="경기 결과를 입력하면 모두의 순위가 바로 갱신됩니다.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
@@ -39,6 +47,9 @@
   --win-bg: #133325; --loss-bg: #3a1c1c; color-scheme: dark;
 }
 * { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+[hidden] { display: none !important; }
+body { margin: 0; padding-bottom: env(safe-area-inset-bottom, 0px); }
 body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.55; }
 .wrap { max-width: 880px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
 
@@ -128,7 +139,13 @@ fieldset { border: none; padding: 0; margin: 0; display: flex; gap: 8px; flex-wr
 .empty { text-align: center; padding: 28px 16px; color: var(--muted); }
 .empty strong { display: block; color: var(--fg); font-size: 16px; margin-bottom: 4px; }
 @media (prefers-reduced-motion: no-preference) { .board { transition: border-color .15s; } .board:hover { border-color: var(--court); } }
+.pinbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+.pinbar .lbl { font-weight: 600; font-size: 14px; color: var(--fg); }
+.pinbar input { width: 9em; flex: 0 0 auto; }
+.pinbar .ok { color: var(--win); font-weight: 600; font-size: 14px; }
 </style>
+</head>
+<body>
 
 <header class="band">
   <div class="wrap">
@@ -147,6 +164,18 @@ fieldset { border: none; padding: 0; margin: 0; display: flex; gap: 8px; flex-wr
 <main>
   <div class="wrap">
     <div id="status" class="notice" hidden></div>
+    <form class="pinbar" id="pin-form" autocomplete="off">
+      <div id="pin-locked" class="row" style="align-items:center;gap:8px 12px">
+        <label class="lbl" for="pin-input">클럽 PIN</label>
+        <input type="password" id="pin-input" inputmode="numeric" pattern="[0-9]*" maxlength="8" placeholder="숫자 PIN">
+        <button class="btn" type="submit" id="pin-btn">확인</button>
+        <span class="hint">결과 입력·삭제에 필요합니다. 보기는 누구나 가능합니다.</span>
+      </div>
+      <div id="pin-unlocked" class="row" style="align-items:center;gap:8px 12px" hidden>
+        <span class="ok">PIN 확인됨 · 결과를 입력할 수 있습니다</span>
+        <button class="btn ghost" type="button" id="pin-forget">이 기기에서 PIN 지우기</button>
+      </div>
+    </form>
 
     <section role="tabpanel" id="p-rank" aria-labelledby="tab-rank">
       <div>
@@ -169,6 +198,10 @@ fieldset { border: none; padding: 0; margin: 0; display: flex; gap: 8px; flex-wr
               <label><input type="radio" name="mtype" id="t-single" value="single" checked> 단식</label>
               <label><input type="radio" name="mtype" id="t-double" value="double"> 복식</label>
             </fieldset>
+            <div class="field">
+              <label for="f-by">입력하는 사람</label>
+              <select id="f-by"></select>
+            </div>
             <div class="field">
               <label for="f-date">날짜</label>
               <input type="date" id="f-date" required>
@@ -236,22 +269,56 @@ fieldset { border: none; padding: 0; margin: 0; display: flex; gap: 8px; flex-wr
         </div>
         <button class="btn" type="submit" style="align-self:end">규칙 저장</button>
       </form>
+
+      <div>
+        <h2>클럽 PIN 변경</h2>
+        <p class="hint">바꾼 뒤에는 단톡방에 새 PIN을 알려 주세요. 다른 기기에 저장된 이전 PIN은 다시 입력해야 합니다.</p>
+      </div>
+      <form class="inline-form" id="newpin-form" autocomplete="off">
+        <div class="field" style="flex:0 1 200px">
+          <label for="s-newpin">새 PIN (숫자 4~8자리)</label>
+          <input type="password" id="s-newpin" inputmode="numeric" pattern="[0-9]*" maxlength="8">
+        </div>
+        <button class="btn" type="submit" style="align-self:end">PIN 변경</button>
+      </form>
     </section>
   </div>
 </main>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
 <script src="ranking.js"></script>
 <script>
 (function () {
   'use strict';
   const R = window.Ranking;
+  const CFG = window.TENNIS_CONFIG || {};
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const today = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+  const store = {
+    get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set(k, v) { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) {} },
+  };
+
+  const ERRORS = {
+    bad_pin: '클럽 PIN이 올바르지 않습니다.',
+    too_many_attempts: 'PIN을 너무 많이 틀렸습니다. 10분 후 다시 시도하세요.',
+    bad_date: '날짜를 확인하세요.',
+    bad_teams: '단식은 1:1, 복식은 2:2로 선수를 선택하세요.',
+    duplicate_player: '같은 선수를 두 번 선택할 수 없습니다.',
+    unknown_player: '등록되지 않은 선수가 있습니다. 새로고침 후 다시 시도하세요.',
+    bad_score: '스코어를 확인하세요. (예: 6-4, 3-6, 7-5)',
+    bad_name: '이름은 1~20자로 입력하세요.',
+    duplicate_member: '같은 이름의 멤버가 이미 있습니다.',
+    member_has_matches: '경기 기록이 있는 멤버는 삭제할 수 없습니다.',
+    bad_points: '승리 승점은 패배 승점보다 크거나 같아야 합니다. (0~10)',
+    bad_new_pin: '새 PIN은 숫자 4~8자리로 입력하세요.',
+  };
 
   const state = {
-    db: null, user: null, uid: null, canWrite: true, loaded: { members: false, matches: false },
-    members: [], matches: [], settings: Object.assign({}, R.DEFAULT_SETTINGS), names: {}, pendingDelete: null,
+    sb: null, pin: store.get('club_pin'), pinOk: false,
+    loaded: false, members: [], matches: [], settings: Object.assign({}, R.DEFAULT_SETTINGS), pendingDelete: null,
   };
 
   // ---------- 탭 ----------
@@ -261,11 +328,11 @@ fieldset { border: none; padding: 0; margin: 0; display: flex; gap: 8px; flex-wr
       $('tab-' + k).setAttribute('aria-selected', String(k === key));
       $('p-' + k).hidden = k !== key;
     });
-    try { localStorage.setItem('tab', key); } catch (e) {}
+    store.set('tab', key);
   }
   tabs.forEach((k) => $('tab-' + k).addEventListener('click', () => showTab(k)));
   let initial = (location.hash || '').slice(1);
-  if (!tabs.includes(initial)) { try { initial = localStorage.getItem('tab') || 'rank'; } catch (e) { initial = 'rank'; } }
+  if (!tabs.includes(initial)) initial = store.get('tab') || 'rank';
   showTab(tabs.includes(initial) ? initial : 'rank');
 
   function setStatus(msg, warn) {
@@ -279,7 +346,7 @@ fieldset { border: none; padding: 0; margin: 0; display: flex; gap: 8px; flex-wr
   // ---------- 렌더 ----------
   function renderStandings() {
     const el = $('standings');
-    if (!state.loaded.members) { el.innerHTML = '<div class="panel empty">순위를 불러오는 중…</div>'; return; }
+    if (!state.loaded) { el.innerHTML = '<div class="panel empty">순위를 불러오는 중…</div>'; return; }
     if (!state.members.length) {
       el.innerHTML = '<div class="panel empty"><strong>아직 멤버가 없습니다</strong>“멤버 · 설정” 탭에서 멤버를 추가한 뒤 경기 결과를 입력하면 여기에 순위가 나타납니다.</div>';
       return;
@@ -301,28 +368,26 @@ fieldset { border: none; padding: 0; margin: 0; display: flex; gap: 8px; flex-wr
     $('rule-hint').textContent = `승리 ${state.settings.winPoints}점 · 패배 ${state.settings.lossPoints}점. 승점 → 승률 → 게임 득실차 → 세트 득실차 순으로 정렬합니다.`;
   }
 
-  function fillSelect(sel, placeholder) {
-    const keep = sel.value;
-    const opts = [`<option value="">${placeholder}</option>`]
-      .concat(state.members.map((m) => `<option value="${esc(m.id)}">${esc(m.name)}</option>`));
-    sel.innerHTML = opts.join('');
-    if (state.members.some((m) => m.id === keep)) sel.value = keep;
+  function fillSelect(sel, placeholder, keep) {
+    const cur = keep !== undefined ? keep : sel.value;
+    sel.innerHTML = [`<option value="">${placeholder}</option>`]
+      .concat(state.members.map((m) => `<option value="${esc(m.id)}">${esc(m.name)}</option>`)).join('');
+    if (state.members.some((m) => m.id === cur)) sel.value = cur;
   }
   function renderSelects() {
     fillSelect($('a1'), '선수 선택'); fillSelect($('a2'), '파트너 선택');
     fillSelect($('b1'), '선수 선택'); fillSelect($('b2'), '파트너 선택');
-    const f = $('log-filter'); const keep = f.value;
-    f.innerHTML = '<option value="">전체 멤버</option>' + state.members.map((m) => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join('');
-    if (state.members.some((m) => m.id === keep)) f.value = keep;
+    fillSelect($('f-by'), '선택 안 함', $('f-by').value || store.get('entered_by') || '');
+    fillSelect($('log-filter'), '전체 멤버');
   }
 
   function renderLog() {
     const el = $('log');
+    if (!state.loaded) { el.innerHTML = '<div class="panel empty">기록을 불러오는 중…</div>'; return; }
     const filter = $('log-filter').value;
     const list = state.matches
       .filter((m) => !filter || m.teamA.includes(filter) || m.teamB.includes(filter))
       .sort((x, y) => (y.date || '').localeCompare(x.date || '') || (y.createdAt || 0) - (x.createdAt || 0));
-    if (!state.loaded.matches) { el.innerHTML = '<div class="panel empty">기록을 불러오는 중…</div>'; return; }
     if (!list.length) {
       el.innerHTML = '<div class="panel empty"><strong>아직 경기 기록이 없습니다</strong>“결과 입력” 탭에서 첫 경기를 기록해 보세요.</div>';
       return;
@@ -342,9 +407,9 @@ fieldset { border: none; padding: 0; margin: 0; display: flex; gap: 8px; flex-wr
       }).join('');
       return `<div class="line ${won ? 'won' : ''}"><div class="who">${esc(teamName(ids))}${won ? '<span class="ballmark" title="승리"></span>' : ''}</div><div class="sets">${sets}</div></div>`;
     };
-    const by = m.createdBy && state.names[m.createdBy] ? ` · 입력: ${esc(state.names[m.createdBy])}` : '';
+    const by = m.enteredBy ? ` · 입력: ${esc(memberName(m.enteredBy))}` : '';
     const confirming = state.pendingDelete === m.id;
-    const acts = !state.canWrite ? '' : confirming
+    const acts = !state.pinOk ? '' : confirming
       ? `<button class="btn danger" data-del-confirm="${esc(m.id)}">삭제 확인</button><button class="btn ghost" data-del-cancel>취소</button>`
       : `<button class="btn ghost" data-del="${esc(m.id)}">삭제</button>`;
     return `<article class="board">${line(m.teamA, 'A')}${line(m.teamB, 'B')}
@@ -354,19 +419,81 @@ fieldset { border: none; padding: 0; margin: 0; display: flex; gap: 8px; flex-wr
   function renderMembers() {
     const used = new Set(state.matches.flatMap((m) => m.teamA.concat(m.teamB)));
     const ul = $('members');
-    if (!state.members.length) { ul.innerHTML = '<li class="hint" style="border:none;background:none">아직 멤버가 없습니다. 위에서 이름을 입력해 추가하세요.</li>'; }
-    else ul.innerHTML = state.members.map((m) => `<li>${esc(m.name)}${state.canWrite && !used.has(m.id)
+    if (!state.members.length) ul.innerHTML = '<li class="hint" style="border:none;background:none">아직 멤버가 없습니다. 위에서 이름을 입력해 추가하세요.</li>';
+    else ul.innerHTML = state.members.map((m) => `<li>${esc(m.name)}${state.pinOk && !used.has(m.id)
       ? `<button type="button" data-rm="${esc(m.id)}" aria-label="${esc(m.name)} 삭제" title="삭제">×</button>` : ''}</li>`).join('');
-    $('s-win').value = state.settings.winPoints;
-    $('s-loss').value = state.settings.lossPoints;
+    if (document.activeElement !== $('s-win')) $('s-win').value = state.settings.winPoints;
+    if (document.activeElement !== $('s-loss')) $('s-loss').value = state.settings.lossPoints;
   }
 
   function applyWriteState() {
-    document.querySelectorAll('#match-form input, #match-form select, #match-form button, #member-form input, #member-form button, #settings-form input, #settings-form button')
-      .forEach((el) => { el.disabled = !state.canWrite; });
+    $('pin-locked').hidden = state.pinOk;
+    $('pin-unlocked').hidden = !state.pinOk;
+    document.querySelectorAll('#match-form input, #match-form select, #match-form button, #member-form input, #member-form button, #settings-form input, #settings-form button, #newpin-form input, #newpin-form button')
+      .forEach((el) => { el.disabled = !state.pinOk; });
   }
 
   function renderAll() { renderSelects(); renderStandings(); renderLog(); renderMembers(); updatePreview(); applyWriteState(); }
+
+  // ---------- 데이터 ----------
+  async function loadAll() {
+    const [mem, mat, set] = await Promise.all([
+      state.sb.from('members').select('id,name').is('deleted_at', null).order('name'),
+      state.sb.from('matches').select('id,played_on,team_a,team_b,sets,entered_by,created_at').is('deleted_at', null),
+      state.sb.from('league_settings').select('win_points,loss_points').eq('id', 1).maybeSingle(),
+    ]);
+    const err = mem.error || mat.error || set.error;
+    if (err) { setStatus('기록을 불러오지 못했습니다. 인터넷 연결을 확인하고 새로고침하세요.', true); return; }
+    state.members = mem.data.slice().sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+    state.matches = mat.data.map((x) => ({
+      id: x.id, date: x.played_on, teamA: x.team_a || [], teamB: x.team_b || [],
+      sets: (x.sets || []).map((v) => [Number(v.a), Number(v.b)]),
+      enteredBy: x.entered_by, createdAt: Date.parse(x.created_at) || 0,
+    })).filter((m) => m.teamA.length && m.teamB.length && m.sets.length);
+    if (set.data) state.settings = { winPoints: set.data.win_points, lossPoints: set.data.loss_points };
+    state.loaded = true;
+    if (/불러오지 못했습니다/.test($('status').textContent)) setStatus('');
+    renderAll();
+  }
+
+  let reloadTimer = null;
+  function scheduleReload() { clearTimeout(reloadTimer); reloadTimer = setTimeout(loadAll, 300); }
+
+  const errCode = (msg) => Object.keys(ERRORS).find((k) => (msg || '').includes(k));
+  async function rpc(fn, args) {
+    if (!state.sb) { setStatus('서버에 연결되지 않았습니다. 새로고침하세요.', true); return null; }
+    const { data, error } = await state.sb.rpc('club_' + fn, Object.assign({ p_pin: state.pin }, args));
+    const code = error ? errCode(error.message) : data && data.error;
+    if (error || code) {
+      if (code === 'bad_pin') { state.pinOk = false; state.pin = null; store.set('club_pin', null); renderAll(); }
+      setStatus(code && ERRORS[code] ? ERRORS[code] : '저장하지 못했습니다. 잠시 후 다시 시도하세요.', true);
+      return null;
+    }
+    setStatus('');
+    scheduleReload();
+    return { data };
+  }
+
+  // ---------- PIN ----------
+  async function verifyPin(pin) {
+    const { data, error } = await state.sb.rpc('club_check_pin', { p_pin: pin });
+    if (error) return 'network';
+    return data && data.error ? data.error : null;
+  }
+  $('pin-form').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const pin = $('pin-input').value.trim();
+    if (!pin || !state.sb) return;
+    $('pin-btn').disabled = true;
+    const err = await verifyPin(pin);
+    $('pin-btn').disabled = false;
+    if (err) { setStatus(ERRORS[err] || '확인하지 못했습니다. 잠시 후 다시 시도하세요.', true); return; }
+    state.pin = pin; state.pinOk = true; store.set('club_pin', pin);
+    $('pin-input').value = ''; setStatus(''); renderAll();
+  });
+  $('pin-forget').addEventListener('click', () => {
+    state.pin = null; state.pinOk = false; store.set('club_pin', null); renderAll();
+  });
 
   // ---------- 입력 폼 ----------
   const isDouble = () => $('t-double').checked;
@@ -377,6 +504,7 @@ fieldset { border: none; padding: 0; margin: 0; display: flex; gap: 8px; flex-wr
   $('t-single').addEventListener('change', syncType);
   $('t-double').addEventListener('change', syncType);
   $('f-date').value = today();
+  $('f-by').addEventListener('change', () => store.set('entered_by', $('f-by').value || null));
 
   function readForm() {
     const teamA = [$('a1').value].concat(isDouble() ? [$('a2').value] : []);
@@ -402,32 +530,15 @@ fieldset { border: none; padding: 0; margin: 0; display: flex; gap: 8px; flex-wr
   }
   ['a1', 'a2', 'b1', 'b2', 'f-score', 'f-date'].forEach((id) => $(id).addEventListener('input', updatePreview));
 
-  async function guarded(fn) {
-    if (!state.db) { setStatus('공유 저장소에 연결되지 않아 저장할 수 없습니다. claude.ai에서 로그인한 상태로 열어 주세요.', true); return false; }
-    try { await fn(); return true; }
-    catch (e) {
-      if (e && e.code === 'invalid_argument') {
-        state.canWrite = false; applyWriteState(); renderLog(); renderMembers();
-        setStatus('이 링크에서는 보기만 할 수 있습니다. 결과를 입력하려면 관리자에게 편집 권한을 요청하세요.', true);
-      } else if (e && e.code === 'quota_exceeded') {
-        setStatus('저장 공간이 가득 찼습니다. 오래된 경기 기록을 삭제한 뒤 다시 시도하세요.', true);
-      } else {
-        setStatus('저장하지 못했습니다. 잠시 후 다시 시도하세요. (' + ((e && e.message) || e) + ')', true);
-      }
-      return false;
-    }
-  }
-
   $('match-form').addEventListener('submit', async (ev) => {
     ev.preventDefault();
     let f; try { f = readForm(); } catch (e) { updatePreview(); return; }
     $('save-btn').disabled = true;
-    const ok = await guarded(() => state.db.collection('matches').add({
-      date: f.date, teamA: f.teamA, teamB: f.teamB,
-      sets: f.sets.map(([a, b]) => ({ a, b })),
-      createdAt: Date.now(), createdBy: state.uid || null,
-    }));
-    $('save-btn').disabled = !state.canWrite;
+    const ok = await rpc('add_match', {
+      p_played_on: f.date, p_team_a: f.teamA, p_team_b: f.teamB,
+      p_sets: f.sets.map(([a, b]) => ({ a, b })), p_entered_by: $('f-by').value || null,
+    });
+    $('save-btn').disabled = !state.pinOk;
     if (ok) {
       $('toast').textContent = `저장했습니다: ${teamName(f.teamA)} ${R.formatScore(f.sets)} ${teamName(f.teamB)}`;
       $('f-score').value = ''; updatePreview();
@@ -442,7 +553,7 @@ fieldset { border: none; padding: 0; margin: 0; display: flex; gap: 8px; flex-wr
     else if (t.hasAttribute('data-del-cancel')) { state.pendingDelete = null; renderLog(); }
     else if (t.dataset.delConfirm) {
       const id = t.dataset.delConfirm; state.pendingDelete = null;
-      await guarded(() => state.db.collection('matches').doc(id).delete());
+      await rpc('remove_match', { p_id: id });
     }
   });
 
@@ -450,76 +561,48 @@ fieldset { border: none; padding: 0; margin: 0; display: flex; gap: 8px; flex-wr
     ev.preventDefault();
     const name = $('m-name').value.trim();
     if (!name) return;
-    if (state.members.some((m) => m.name === name)) { setStatus(`“${name}” 멤버가 이미 있습니다.`, true); return; }
-    if (await guarded(() => state.db.collection('members').add({ name, createdAt: Date.now() }))) { $('m-name').value = ''; setStatus(''); }
+    if (state.members.some((m) => m.name === name)) { setStatus(ERRORS.duplicate_member, true); return; }
+    if (await rpc('add_member', { p_name: name })) $('m-name').value = '';
   });
   $('members').addEventListener('click', async (ev) => {
     const t = ev.target.closest('button[data-rm]'); if (!t) return;
-    await guarded(() => state.db.collection('members').doc(t.dataset.rm).delete());
+    await rpc('remove_member', { p_id: t.dataset.rm });
   });
   $('settings-form').addEventListener('submit', async (ev) => {
     ev.preventDefault();
-    const winPoints = Number($('s-win').value), lossPoints = Number($('s-loss').value);
-    if (!Number.isFinite(winPoints) || !Number.isFinite(lossPoints) || winPoints < lossPoints) {
-      setStatus('승리 승점은 패배 승점보다 크거나 같아야 합니다.', true); return;
+    const w = Number($('s-win').value), l = Number($('s-loss').value);
+    if (!Number.isInteger(w) || !Number.isInteger(l) || w < l || l < 0 || w > 10) { setStatus(ERRORS.bad_points, true); return; }
+    if (await rpc('set_points', { p_win: w, p_loss: l })) setStatus('승점 규칙을 저장했습니다.');
+  });
+  $('newpin-form').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const np = $('s-newpin').value.trim();
+    if (!/^[0-9]{4,8}$/.test(np)) { setStatus(ERRORS.bad_new_pin, true); return; }
+    if (await rpc('change_pin', { p_new_pin: np })) {
+      state.pin = np; store.set('club_pin', np); $('s-newpin').value = '';
+      setStatus('클럽 PIN을 변경했습니다. 단톡방에 새 PIN을 알려 주세요.');
     }
-    if (await guarded(() => state.db.doc('config/league').set({ winPoints, lossPoints }))) setStatus('승점 규칙을 저장했습니다.');
   });
 
-  // ---------- 공유 저장소 연결 ----------
+  // ---------- 시작 ----------
   renderAll(); syncType();
-  async function resolveNames() {
-    if (!state.user || !state.user.profiles) return;
-    const ids = [...new Set(state.matches.map((m) => m.createdBy).filter(Boolean))];
-    if (!ids.length) return;
-    try {
-      const ps = await state.user.profiles(ids);
-      ids.forEach((id) => { if (ps && ps[id]) state.names[id] = ps[id].name || ''; });
-      renderLog();
-    } catch (e) {}
+  if (!window.supabase || !CFG.supabaseUrl || !CFG.supabaseKey) {
+    state.loaded = true; renderAll();
+    setStatus('서버 설정을 불러오지 못했습니다. 인터넷 연결을 확인하고 새로고침하세요.', true);
+    return;
   }
-
-  (async () => {
-    if (!window.claude || !window.claude.use) {
-      state.canWrite = false; state.loaded.members = state.loaded.matches = true; renderAll();
-      setStatus('공유 저장소 없이 열렸습니다. claude.ai 링크로 열어야 결과를 함께 보고 입력할 수 있습니다.', true);
-      return;
-    }
-    const [db, user] = await Promise.all([window.claude.use('db'), window.claude.use('user')]);
-    state.db = db; state.user = user;
-    if (!db) {
-      state.canWrite = false; state.loaded.members = state.loaded.matches = true; renderAll();
-      setStatus('공유 저장소에 연결할 수 없습니다. claude.ai에 로그인한 상태로 링크를 열어 주세요.', true);
-      return;
-    }
-    if (user) {
-      try { state.uid = await user.id(); } catch (e) {}
-      try { if (user.can && (await user.can('data.write')) === false) { state.canWrite = false; setStatus('보기 전용 권한입니다. 결과를 입력하려면 관리자에게 편집 권한을 요청하세요.'); } } catch (e) {}
-    }
-    const onErr = (e) => { if (e && e.code !== 'revoked') setStatus('실시간 갱신이 끊겼습니다. 페이지를 새로고침하세요.', true); };
-    db.collection('members').onSnapshot((s) => {
-      state.members = s.docs.map((d) => Object.assign({ id: d.id }, d.data()))
-        .filter((m) => typeof m.name === 'string')
-        .sort((a, b) => a.name.localeCompare(b.name, 'ko'));
-      state.loaded.members = true; renderAll();
-    }, onErr);
-    db.collection('matches').onSnapshot((s) => {
-      state.matches = s.docs.map((d) => {
-        const x = d.data();
-        return { id: d.id, date: x.date, createdAt: x.createdAt, createdBy: x.createdBy,
-          teamA: Array.isArray(x.teamA) ? x.teamA : [], teamB: Array.isArray(x.teamB) ? x.teamB : [],
-          sets: Array.isArray(x.sets) ? x.sets.map((v) => [Number(v.a), Number(v.b)]) : [] };
-      }).filter((m) => m.teamA.length && m.teamB.length && m.sets.length);
-      state.loaded.matches = true; renderAll(); resolveNames();
-    }, onErr);
-    db.doc('config/league').onSnapshot((d) => {
-      const x = d.exists ? d.data() : {};
-      state.settings = {
-        winPoints: Number.isFinite(x.winPoints) ? x.winPoints : R.DEFAULT_SETTINGS.winPoints,
-        lossPoints: Number.isFinite(x.lossPoints) ? x.lossPoints : R.DEFAULT_SETTINGS.lossPoints,
-      };
-      renderStandings(); renderMembers();
-    }, onErr);
-  })();
+  state.sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseKey, { auth: { persistSession: false } });
+  loadAll();
+  if (state.pin) verifyPin(state.pin).then((err) => {
+    if (!err) { state.pinOk = true; renderAll(); }
+    else if (err === 'bad_pin') { state.pin = null; store.set('club_pin', null); }
+  });
+  state.sb.channel('club')
+    .on('postgres_changes', { event: '*', schema: 'public' }, scheduleReload)
+    .subscribe();
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) scheduleReload(); });
+  setInterval(() => { if (!document.hidden) loadAll(); }, 60000);
 })();
 </script>
+</body>
+</html>

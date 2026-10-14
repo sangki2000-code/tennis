@@ -1,101 +1,105 @@
--- 쓰기는 모두 PIN을 확인하는 함수로만 가능합니다. 테이블에는 읽기 정책만 있습니다.
--- 오류 코드(메시지)는 페이지에서 한국어 문구로 바꿔 보여줍니다.
+-- 실제 적용된 함수 (2026-10-14). 쓰기는 모두 클럽 PIN을 확인하는 club_* 함수로만 가능합니다.
+-- 참고: Supabase 연결 도구 문제로 함수 본문은 $$ 대신 작은따옴표로 감쌌습니다.
+-- PIN이 틀리면 예외 대신 {"error":"bad_pin"}을 돌려줍니다. 예외를 던지면 실패 기록까지 롤백되어 시도 제한이 동작하지 않기 때문입니다.
+-- 삭제는 deleted_at을 채우는 방식(숨김 처리)입니다.
 
-create or replace function private.require_pin(p_pin text) returns void
-language plpgsql security definer set search_path = '' as $$
+alter table public.matches add column if not exists deleted_at timestamptz;
+alter table public.members add column if not exists deleted_at timestamptz;
+
+create or replace function private.pin_error(p_pin text) returns text
+language plpgsql security definer set search_path = '' as '
 declare v_hash text; v_fails int;
 begin
-  select count(*) into v_fails from private.pin_failures where at > now() - interval '10 minutes';
-  if v_fails >= 20 then
-    raise exception 'too_many_attempts';
-  end if;
+  select count(*) into v_fails from private.pin_failures where at > now() - interval ''10 minutes'';
+  if v_fails >= 10 then return ''too_many_attempts''; end if;
   select pin_hash into v_hash from private.club_secret where id = 1;
   if v_hash is null or p_pin is null or extensions.crypt(p_pin, v_hash) <> v_hash then
     insert into private.pin_failures default values;
-    delete from private.pin_failures where at < now() - interval '1 day';
-    raise exception 'bad_pin';
+    return ''bad_pin'';
   end if;
-end $$;
+  return null;
+end ';
 
-create or replace function public.check_pin(p_pin text) returns boolean
-language plpgsql security definer set search_path = '' as $$
+create or replace function public.club_check_pin(p_pin text) returns jsonb
+language plpgsql security definer set search_path = '' as '
+declare v_err text := private.pin_error(p_pin);
 begin
-  perform private.require_pin(p_pin);
-  return true;
-end $$;
+  if v_err is not null then return jsonb_build_object(''error'', v_err); end if;
+  return jsonb_build_object(''ok'', true);
+end ';
 
-create or replace function public.add_match(p_pin text, p_played_on date, p_team_a uuid[], p_team_b uuid[], p_sets jsonb, p_entered_by uuid default null)
-returns uuid language plpgsql security definer set search_path = '' as $$
-declare v_id uuid; v_all uuid[]; s jsonb; v_a int; v_b int;
+create or replace function public.club_add_match(p_pin text, p_played_on date, p_team_a uuid[], p_team_b uuid[], p_sets jsonb, p_entered_by uuid default null)
+returns jsonb language plpgsql security definer set search_path = '' as '
+declare v_err text := private.pin_error(p_pin); v_id uuid; v_all uuid[]; s jsonb; v_a int; v_b int;
 begin
-  perform private.require_pin(p_pin);
-  if p_played_on is null or p_played_on > current_date + 1 then raise exception 'bad_date'; end if;
-  if cardinality(p_team_a) not in (1, 2) or cardinality(p_team_a) <> cardinality(p_team_b) then
-    raise exception 'bad_teams';
-  end if;
+  if v_err is not null then return jsonb_build_object(''error'', v_err); end if;
+  if p_played_on is null or p_played_on > current_date + 1 then raise exception ''bad_date''; end if;
+  if cardinality(p_team_a) not in (1, 2) or cardinality(p_team_a) <> cardinality(p_team_b) then raise exception ''bad_teams''; end if;
   v_all := p_team_a || p_team_b;
-  if (select count(distinct x) from unnest(v_all) x) <> cardinality(v_all) then raise exception 'duplicate_player'; end if;
-  if (select count(*) from public.members where id = any(v_all)) <> cardinality(v_all) then raise exception 'unknown_player'; end if;
-  if jsonb_typeof(p_sets) <> 'array' or jsonb_array_length(p_sets) not between 1 and 5 then raise exception 'bad_score'; end if;
+  if (select count(distinct x) from unnest(v_all) x) <> cardinality(v_all) then raise exception ''duplicate_player''; end if;
+  if (select count(*) from public.members where id = any(v_all) and deleted_at is null) <> cardinality(v_all) then raise exception ''unknown_player''; end if;
+  if jsonb_typeof(p_sets) <> ''array'' or jsonb_array_length(p_sets) not between 1 and 5 then raise exception ''bad_score''; end if;
   for s in select * from jsonb_array_elements(p_sets) loop
-    v_a := (s->>'a')::int; v_b := (s->>'b')::int;
-    if v_a is null or v_b is null or v_a < 0 or v_b < 0 or v_a > 99 or v_b > 99 or v_a = v_b then
-      raise exception 'bad_score';
-    end if;
+    v_a := (s->>''a'')::int; v_b := (s->>''b'')::int;
+    if v_a is null or v_b is null or v_a < 0 or v_b < 0 or v_a > 99 or v_b > 99 or v_a = v_b then raise exception ''bad_score''; end if;
   end loop;
   insert into public.matches (played_on, team_a, team_b, sets, entered_by)
   values (p_played_on, p_team_a, p_team_b,
-          (select jsonb_agg(jsonb_build_object('a', (e->>'a')::int, 'b', (e->>'b')::int)) from jsonb_array_elements(p_sets) e),
+          (select jsonb_agg(jsonb_build_object(''a'', (e->>''a'')::int, ''b'', (e->>''b'')::int)) from jsonb_array_elements(p_sets) e),
           p_entered_by)
   returning id into v_id;
-  return v_id;
-end $$;
+  return jsonb_build_object(''ok'', true, ''id'', v_id);
+end ';
 
-create or replace function public.delete_match(p_pin text, p_id uuid) returns void
-language plpgsql security definer set search_path = '' as $$
+create or replace function public.club_remove_match(p_pin text, p_id uuid) returns jsonb
+language plpgsql security definer set search_path = '' as '
+declare v_err text := private.pin_error(p_pin);
 begin
-  perform private.require_pin(p_pin);
-  delete from public.matches where id = p_id;
-end $$;
+  if v_err is not null then return jsonb_build_object(''error'', v_err); end if;
+  update public.matches set deleted_at = now() where id = p_id and deleted_at is null;
+  return jsonb_build_object(''ok'', true);
+end ';
 
-create or replace function public.add_member(p_pin text, p_name text) returns uuid
-language plpgsql security definer set search_path = '' as $$
-declare v_id uuid;
+create or replace function public.club_add_member(p_pin text, p_name text) returns jsonb
+language plpgsql security definer set search_path = '' as '
+declare v_err text := private.pin_error(p_pin); v_id uuid; v_name text := btrim(p_name);
 begin
-  perform private.require_pin(p_pin);
-  if exists (select 1 from public.members where name = btrim(p_name)) then raise exception 'duplicate_member'; end if;
-  insert into public.members (name) values (btrim(p_name)) returning id into v_id;
-  return v_id;
-end $$;
+  if v_err is not null then return jsonb_build_object(''error'', v_err); end if;
+  if v_name is null or char_length(v_name) not between 1 and 20 then raise exception ''bad_name''; end if;
+  if exists (select 1 from public.members where name = v_name and deleted_at is null) then raise exception ''duplicate_member''; end if;
+  update public.members set deleted_at = null where name = v_name returning id into v_id;
+  if v_id is null then insert into public.members (name) values (v_name) returning id into v_id; end if;
+  return jsonb_build_object(''ok'', true, ''id'', v_id);
+end ';
 
-create or replace function public.delete_member(p_pin text, p_id uuid) returns void
-language plpgsql security definer set search_path = '' as $$
+create or replace function public.club_remove_member(p_pin text, p_id uuid) returns jsonb
+language plpgsql security definer set search_path = '' as '
+declare v_err text := private.pin_error(p_pin);
 begin
-  perform private.require_pin(p_pin);
-  if exists (select 1 from public.matches where p_id = any(team_a) or p_id = any(team_b)) then
-    raise exception 'member_has_matches';
-  end if;
-  delete from public.members where id = p_id;
-end $$;
+  if v_err is not null then return jsonb_build_object(''error'', v_err); end if;
+  if exists (select 1 from public.matches where deleted_at is null and (p_id = any(team_a) or p_id = any(team_b))) then raise exception ''member_has_matches''; end if;
+  update public.members set deleted_at = now() where id = p_id;
+  return jsonb_build_object(''ok'', true);
+end ';
 
-create or replace function public.set_points(p_pin text, p_win int, p_loss int) returns void
-language plpgsql security definer set search_path = '' as $$
+create or replace function public.club_set_points(p_pin text, p_win int, p_loss int) returns jsonb
+language plpgsql security definer set search_path = '' as '
+declare v_err text := private.pin_error(p_pin);
 begin
-  perform private.require_pin(p_pin);
-  if p_win is null or p_loss is null or p_win < p_loss or p_loss < 0 or p_win > 10 then raise exception 'bad_points'; end if;
+  if v_err is not null then return jsonb_build_object(''error'', v_err); end if;
+  if p_win is null or p_loss is null or p_win < p_loss or p_loss < 0 or p_win > 10 then raise exception ''bad_points''; end if;
   update public.league_settings set win_points = p_win, loss_points = p_loss where id = 1;
-end $$;
+  return jsonb_build_object(''ok'', true);
+end ';
 
-create or replace function public.change_pin(p_pin text, p_new_pin text) returns void
-language plpgsql security definer set search_path = '' as $$
+create or replace function public.club_change_pin(p_pin text, p_new_pin text) returns jsonb
+language plpgsql security definer set search_path = '' as '
+declare v_err text := private.pin_error(p_pin);
 begin
-  perform private.require_pin(p_pin);
-  if p_new_pin is null or length(p_new_pin) not between 4 and 8 or p_new_pin ~ '[^0-9]' then raise exception 'bad_new_pin'; end if;
-  update private.club_secret set pin_hash = extensions.crypt(p_new_pin, extensions.gen_salt('bf')) where id = 1;
-end $$;
+  if v_err is not null then return jsonb_build_object(''error'', v_err); end if;
+  if p_new_pin is null or length(p_new_pin) not between 4 and 8 or p_new_pin ~ ''[^0-9]'' then raise exception ''bad_new_pin''; end if;
+  update private.club_secret set pin_hash = extensions.crypt(p_new_pin, extensions.gen_salt(''bf'')) where id = 1;
+  return jsonb_build_object(''ok'', true);
+end ';
 
-revoke execute on function private.require_pin(text) from public, anon, authenticated;
-revoke execute on all functions in schema public from public, anon, authenticated;
-grant execute on function public.check_pin(text), public.add_match(text, date, uuid[], uuid[], jsonb, uuid),
-  public.delete_match(text, uuid), public.add_member(text, text), public.delete_member(text, uuid),
-  public.set_points(text, int, int), public.change_pin(text, text) to anon, authenticated;
+alter publication supabase_realtime add table public.members, public.matches, public.league_settings;
