@@ -5,6 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>클럽 테니스 랭킹</title>
 <meta name="description" content="테니스 클럽 경기 결과 입력과 실시간 순위">
+<meta name="theme-color" content="#1d5a8c">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icons/favicon-64.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="테니스 랭킹">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta property="og:image" content="https://sangki2000-code.github.io/tennis/icons/icon-512.png">
+<meta property="og:url" content="https://sangki2000-code.github.io/tennis/">
 <meta property="og:type" content="website">
 <meta property="og:title" content="클럽 테니스 랭킹">
 <meta property="og:description" content="경기 결과를 입력하면 모두의 순위가 바로 갱신됩니다.">
@@ -58,7 +68,7 @@ header.band::before, header.band::after { content: ""; position: absolute; point
 header.band::before { inset: 14px -2px auto 55%; height: 200px; border-right: none; }
 header.band::after { left: 77%; top: 14px; bottom: -2px; width: 0; border-width: 0 0 0 2px; }
 header .wrap { padding-block: 28px 20px; position: relative; z-index: 1; }
-.eyebrow { font-family: var(--font-display); text-transform: uppercase; letter-spacing: .14em; font-size: 13px; opacity: .8; }
+.eyebrow { padding-right: 96px; font-family: var(--font-display); text-transform: uppercase; letter-spacing: .14em; font-size: 13px; opacity: .8; }
 h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(34px, 7vw, 48px); line-height: 1; margin: 4px 0 6px; text-wrap: balance; }
 .sub { margin: 0; opacity: .85; font-size: 14px; }
 
@@ -155,6 +165,12 @@ table.small { min-width: 420px; }
 .rec .w { color: var(--win); font-weight: 600; } .rec .l { color: var(--loss); font-weight: 600; }
 .edit-banner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; border-color: var(--court); }
 .edit-banner span { font-weight: 600; }
+.install-btn { position: absolute; z-index: 2; top: 22px; right: max(16px, env(safe-area-inset-right, 0px)); font: 600 13px var(--font-body); color: var(--court-band); background: var(--ball); border: none; border-radius: 999px; padding: 6px 12px; cursor: pointer; }
+header .wrap { position: relative; }
+.install-help { display: grid; gap: 8px; border-color: var(--court); }
+.install-help ol { margin: 0; padding-left: 20px; display: grid; gap: 4px; }
+.install-help a.btn { text-decoration: none; display: inline-block; }
+.install-help .acts { display: flex; gap: 8px; flex-wrap: wrap; }
 .pinbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
 .pinbar .lbl { font-weight: 600; font-size: 14px; color: var(--fg); }
 .pinbar input { width: 9em; flex: 0 0 auto; }
@@ -165,6 +181,7 @@ table.small { min-width: 420px; }
 
 <header class="band">
   <div class="wrap">
+    <button type="button" class="install-btn" id="install-btn" hidden>앱 설치</button>
     <div class="eyebrow">Club League · Singles &amp; Doubles</div>
     <h1>클럽 테니스 랭킹</h1>
     <p class="sub">경기 결과를 입력하면 모두의 순위가 바로 갱신됩니다.</p>
@@ -181,6 +198,7 @@ table.small { min-width: 420px; }
 <main>
   <div class="wrap">
     <div id="status" class="notice" hidden></div>
+    <div id="install-help" class="notice install-help" hidden></div>
     <form class="pinbar" id="pin-form" autocomplete="off">
       <div id="pin-locked" class="row" style="align-items:center;gap:8px 12px">
         <label class="lbl" for="pin-input">클럽 PIN</label>
@@ -764,6 +782,53 @@ table.small { min-width: 420px; }
       setStatus('클럽 PIN을 변경했습니다. 단톡방에 새 PIN을 알려 주세요.');
     }
   });
+
+
+  // ---------- 앱 설치 (PWA) ----------
+  (function setupInstall() {
+    if ('serviceWorker' in navigator && window.isSecureContext) {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    }
+    const standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+    if (standalone) return; // 이미 앱으로 실행 중
+    const ua = navigator.userAgent;
+    const isKakao = /KAKAOTALK/i.test(ua);
+    const isIOS = /iPhone|iPad|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const btn = $('install-btn'), help = $('install-help');
+    let deferred = null;
+    const closeBtn = '<button type="button" class="btn ghost" data-install-close>닫기</button>';
+    function showHelp(html) { help.innerHTML = html; help.hidden = false; help.scrollIntoView({ block: 'nearest' }); }
+
+    window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferred = e; btn.hidden = false; });
+    window.addEventListener('appinstalled', () => { btn.hidden = true; help.hidden = true; deferred = null; });
+    if (isKakao || isIOS) btn.hidden = false;
+
+    btn.addEventListener('click', async () => {
+      if (deferred) { deferred.prompt(); await deferred.userChoice.catch(() => {}); deferred = null; btn.hidden = true; return; }
+      if (isKakao) {
+        const ext = 'kakaotalk://web/openExternal?url=' + encodeURIComponent(location.href.split('#')[0]);
+        showHelp(`<strong>카카오톡 안에서는 앱을 설치할 수 없습니다</strong>
+          <span>${isIOS ? 'Safari' : 'Chrome'}에서 열어 설치해 주세요. 아래 버튼이 안 되면 오른쪽 ${isIOS ? '아래' : '위'} 메뉴(⋯ 또는 ⋮)에서 <b>다른 브라우저로 열기</b>를 누르세요.</span>
+          <div class="acts"><a class="btn" href="${ext}">${isIOS ? 'Safari' : 'Chrome'}로 열기</a>${closeBtn}</div>`);
+        return;
+      }
+      if (isIOS) {
+        showHelp(`<strong>아이폰에 설치하기</strong>
+          <ol><li>Safari 화면 아래(또는 위)의 <b>공유 버튼</b>(네모에 화살표 ↑)을 누릅니다.</li>
+          <li>목록을 내려 <b>홈 화면에 추가</b>를 누릅니다.</li>
+          <li>오른쪽 위 <b>추가</b>를 누르면 홈 화면에 테니스 랭킹 아이콘이 생깁니다.</li></ol>
+          <span class="hint">Safari가 아닌 다른 앱 안에서 열었다면 먼저 Safari로 열어 주세요.</span>
+          <div class="acts">${closeBtn}</div>`);
+        return;
+      }
+      showHelp(`<strong>휴대폰에 설치하기</strong>
+        <ol><li>Chrome 오른쪽 위 <b>⋮ 메뉴</b>를 누릅니다.</li><li><b>앱 설치</b> 또는 <b>홈 화면에 추가</b>를 누릅니다.</li></ol>
+        <div class="acts">${closeBtn}</div>`);
+    });
+    help.addEventListener('click', (e) => { if (e.target.closest('[data-install-close]')) help.hidden = true; });
+    // 일반 브라우저에서 설치 이벤트가 늦게 오는 경우를 대비해 안드로이드에서는 안내 버튼을 보여 줍니다.
+    if (/Android/i.test(ua)) setTimeout(() => { btn.hidden = false; }, 3000);
+  })();
 
   // ---------- 시작 ----------
   renderAll(); syncType();
