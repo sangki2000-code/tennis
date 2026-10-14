@@ -167,3 +167,11 @@ begin
   if v_n = 0 then raise exception ''member_not_found''; end if;
   return jsonb_build_object(''ok'', true);
 end ';
+
+-- 마스터 권한 (2026-10-14 추가)
+-- private.club_secret.master_hash: 마스터 PIN 해시
+-- private.pin_error: 클럽 PIN 또는 마스터 PIN 통과 (결과 입력·멤버 추가)
+-- private.master_error: 마스터 PIN만 통과, 실패 시 bad_master
+-- 마스터 전용: club_update_match, club_remove_match, club_rename_member, club_remove_member,
+--             club_set_points(4인자), club_change_pin, club_change_master_pin, club_check_master
+-- (예전 3인자 club_set_points 는 항상 bad_master 를 돌려줌)

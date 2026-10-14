@@ -220,7 +220,7 @@ header .wrap { position: relative; }
         <span class="hint">결과 입력·삭제에 필요합니다. 보기는 누구나 가능합니다.</span>
       </div>
       <div id="pin-unlocked" class="row" style="align-items:center;gap:8px 12px" hidden>
-        <span class="ok">PIN 확인됨 · 결과를 입력할 수 있습니다</span>
+        <span class="ok" id="pin-ok-text">PIN 확인됨 · 결과를 입력할 수 있습니다</span>
         <button class="btn ghost" type="button" id="pin-forget">이 기기에서 PIN 지우기</button>
       </div>
     </form>
@@ -316,7 +316,7 @@ header .wrap { position: relative; }
     <section role="tabpanel" id="p-log" aria-labelledby="tab-log" hidden>
       <div>
         <h2>경기 기록</h2>
-        <p class="hint">최신 경기가 위에 표시됩니다. 굵은 줄이 승리 팀입니다.</p>
+        <p class="hint">최신 경기가 위에 표시됩니다. 굵은 줄이 승리 팀입니다. 수정·삭제는 마스터만 할 수 있습니다.</p>
       </div>
       <div class="field" style="max-width:280px">
         <label for="log-filter">멤버별 보기</label>
@@ -327,8 +327,21 @@ header .wrap { position: relative; }
 
     <section role="tabpanel" id="p-mem" aria-labelledby="tab-mem" hidden>
       <div>
+        <h2>마스터</h2>
+        <p class="hint">경기·멤버 수정과 삭제, 승점 규칙과 PIN 변경은 마스터만 할 수 있습니다.</p>
+      </div>
+      <form class="inline-form" id="master-form" autocomplete="off">
+        <input type="password" id="master-input" inputmode="numeric" pattern="[0-9]*" maxlength="12" placeholder="마스터 PIN" aria-label="마스터 PIN">
+        <button class="btn" type="submit" id="master-btn">마스터 로그인</button>
+      </form>
+      <div class="notice" id="master-on" hidden>
+        <strong style="color:var(--win)">마스터 모드 켜짐</strong> · 경기와 멤버를 수정·삭제할 수 있습니다.
+        <button class="btn ghost" type="button" id="master-logout">마스터 로그아웃</button>
+      </div>
+
+      <div>
         <h2>멤버</h2>
-        <p class="hint">이름 수정·삭제는 클럽 PIN이 필요합니다. 경기 기록이 있는 멤버는 삭제할 수 없습니다(이름 수정은 가능).</p>
+        <p class="hint">멤버 추가는 클럽 PIN으로 할 수 있습니다. 이름 수정·삭제는 마스터만 가능하며, 경기 기록이 있는 멤버는 삭제할 수 없습니다.</p>
       </div>
       <form class="inline-form" id="member-form">
         <input type="text" id="m-name" placeholder="이름" maxlength="20" aria-label="새 멤버 이름" required>
@@ -336,6 +349,7 @@ header .wrap { position: relative; }
       </form>
       <ul class="members" id="members"></ul>
 
+      <div id="master-area" hidden style="display:grid;gap:16px">
       <div>
         <h2>승점 규칙</h2>
         <p class="hint">참여를 장려하려면 패배에도 승점을 주세요.</p>
@@ -367,14 +381,27 @@ header .wrap { position: relative; }
         </div>
         <button class="btn" type="submit" style="align-self:end">PIN 변경</button>
       </form>
+
+      <div>
+        <h2>마스터 PIN 변경</h2>
+        <p class="hint">마스터 PIN은 관리자만 알고 있어야 합니다. 단톡방에 올리지 마세요.</p>
+      </div>
+      <form class="inline-form" id="newmaster-form" autocomplete="off">
+        <div class="field" style="flex:0 1 220px">
+          <label for="s-newmaster">새 마스터 PIN (숫자 6~12자리)</label>
+          <input type="password" id="s-newmaster" inputmode="numeric" pattern="[0-9]*" maxlength="12">
+        </div>
+        <button class="btn" type="submit" style="align-self:end">마스터 PIN 변경</button>
+      </form>
+      </div>
     </section>
   </div>
 </main>
-<footer class="ver wrap">클럽 테니스 랭킹 · 버전 <span id="app-ver">2026.10.14-7</span></footer>
+<footer class="ver wrap">클럽 테니스 랭킹 · 버전 <span id="app-ver">2026.10.14-8</span> · <button type="button" class="namelink" id="master-link" style="font-size:12px;font-weight:500;color:var(--muted)">마스터</button></footer>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="config.js?v=2026.10.14-7"></script>
-<script src="ranking.js?v=2026.10.14-7"></script>
+<script src="config.js?v=2026.10.14-8"></script>
+<script src="ranking.js?v=2026.10.14-8"></script>
 <script>
 (function () {
   'use strict';
@@ -403,10 +430,12 @@ header .wrap { position: relative; }
     member_not_found: '이 멤버는 이미 삭제되었습니다.',
     bad_points: '승점은 승리 ≥ 무승부 ≥ 패배 순서로, 0~10점 사이로 정하세요.',
     bad_new_pin: '새 PIN은 숫자 4~8자리로 입력하세요.',
+    bad_master: '마스터 PIN이 올바르지 않습니다. 수정·삭제는 마스터만 할 수 있습니다.',
+    bad_new_master: '새 마스터 PIN은 숫자 6~12자리로 입력하세요.',
   };
 
   const state = {
-    sb: null, pin: store.get('club_pin'), pinOk: false,
+    sb: null, pin: store.get('club_pin'), pinOk: false, masterPin: store.get('master_pin'), masterOk: false,
     loaded: false, members: [], matches: [], settings: Object.assign({}, R.DEFAULT_SETTINGS), pendingDelete: null, editingId: null, pendingEdit: null, memberEdit: null, memberEditName: '', memberDel: null,
   };
 
@@ -583,7 +612,7 @@ header .wrap { position: relative; }
     const by = (m.enteredBy ? ` · 입력: ${esc(memberName(m.enteredBy))}` : '') + (m.edited ? ' · 수정됨' : '');
     const confirming = state.pendingDelete === m.id;
     const editBtn = `<button class="btn ghost" data-edit="${esc(m.id)}">수정</button>`;
-    const acts = (confirming && state.pinOk)
+    const acts = !state.masterOk ? '' : confirming
       ? `<button class="btn danger" data-del-confirm="${esc(m.id)}">삭제 확인</button><button class="btn ghost" data-del-cancel>취소</button>`
       : editBtn + `<button class="btn ghost" data-del="${esc(m.id)}">삭제</button>`;
     return `<article class="board">${line(m.teamA, 'A')}${line(m.teamB, 'B')}
@@ -602,7 +631,7 @@ header .wrap { position: relative; }
           return `<li><input type="text" id="member-edit-input" maxlength="20" value="${esc(state.memberEditName)}" aria-label="새 이름">
             <span class="macts"><button class="btn" type="button" data-mem-save="${id}">저장</button><button class="btn ghost" type="button" data-mem-cancel>취소</button></span></li>`;
         }
-        const acts = state.memberDel === m.id
+        const acts = !state.masterOk ? '' : state.memberDel === m.id
           ? `<button class="btn danger" type="button" data-mem-del-confirm="${id}">삭제 확인</button><button class="btn ghost" type="button" data-mem-cancel>취소</button>`
           : `<button class="btn ghost" type="button" data-mem-edit="${id}">이름 수정</button><button class="btn ghost" type="button" data-mem-del="${id}">삭제</button>`;
         return `<li><span class="mname">${esc(m.name)}</span><span class="mcount">${counts.get(m.id) || 0}경기</span><span class="macts">${acts}</span></li>`;
@@ -615,11 +644,17 @@ header .wrap { position: relative; }
     if (document.activeElement !== $('s-draw')) $('s-draw').value = state.settings.drawPoints;
   }
 
+  const canWrite = () => state.pinOk || state.masterOk;
   function applyWriteState() {
-    $('pin-locked').hidden = state.pinOk;
-    $('pin-unlocked').hidden = !state.pinOk;
-    document.querySelectorAll('#match-form input, #match-form select, #match-form button, #member-form input, #member-form button, #settings-form input, #settings-form button, #newpin-form input, #newpin-form button')
-      .forEach((el) => { el.disabled = !state.pinOk; });
+    $('pin-locked').hidden = canWrite();
+    $('pin-unlocked').hidden = !canWrite();
+    $('pin-ok-text').textContent = state.masterOk ? '마스터 모드 · 입력·수정·삭제를 할 수 있습니다' : 'PIN 확인됨 · 결과를 입력할 수 있습니다';
+    $('pin-forget').hidden = !state.pinOk;
+    document.querySelectorAll('#match-form input, #match-form select, #match-form button, #member-form input, #member-form button')
+      .forEach((el) => { el.disabled = !canWrite(); });
+    $('master-form').hidden = state.masterOk;
+    $('master-on').hidden = !state.masterOk;
+    $('master-area').hidden = !state.masterOk;
   }
 
   function renderAll() { renderSelects(); renderStandings(); renderPlayer(); renderLog(); renderMembers(); updatePreview(); applyWriteState(); }
@@ -649,12 +684,17 @@ header .wrap { position: relative; }
   function scheduleReload() { clearTimeout(reloadTimer); reloadTimer = setTimeout(loadAll, 300); }
 
   const errCode = (msg) => Object.keys(ERRORS).find((k) => (msg || '').includes(k));
+  const MASTER_FNS = new Set(['update_match', 'remove_match', 'rename_member', 'remove_member', 'set_points', 'change_pin', 'change_master_pin']);
+  function clearMaster() { state.masterOk = false; state.masterPin = null; store.set('master_pin', null); }
   async function rpc(fn, args) {
     if (!state.sb) { setStatus('서버에 연결되지 않았습니다. 새로고침하세요.', true); return null; }
-    const { data, error } = await state.sb.rpc('club_' + fn, Object.assign({ p_pin: state.pin }, args));
+    const isMaster = MASTER_FNS.has(fn);
+    const pin = isMaster ? state.masterPin : (state.pinOk ? state.pin : state.masterPin);
+    const { data, error } = await state.sb.rpc('club_' + fn, Object.assign({ p_pin: pin }, args));
     const code = error ? errCode(error.message) : data && data.error;
     if (error || code) {
-      if (code === 'bad_pin') { state.pinOk = false; state.pin = null; store.set('club_pin', null); renderAll(); }
+      if (code === 'bad_master' || (code === 'bad_pin' && !state.pinOk)) { clearMaster(); renderAll(); }
+      else if (code === 'bad_pin') { state.pinOk = false; state.pin = null; store.set('club_pin', null); renderAll(); }
       setStatus(code && ERRORS[code] ? ERRORS[code] : '저장하지 못했습니다. 잠시 후 다시 시도하세요.', true);
       return null;
     }
@@ -691,6 +731,25 @@ header .wrap { position: relative; }
     state.pin = null; state.pinOk = false; store.set('club_pin', null); renderAll();
   });
 
+  async function verifyMaster(pin) {
+    const { data, error } = await state.sb.rpc('club_check_master', { p_pin: pin });
+    if (error) return 'network';
+    return data && data.error ? data.error : null;
+  }
+  $('master-form').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const pin = $('master-input').value.trim();
+    if (!pin || !state.sb) return;
+    $('master-btn').disabled = true;
+    const err = await verifyMaster(pin);
+    $('master-btn').disabled = false;
+    if (err) { setStatus(ERRORS[err] || '확인하지 못했습니다. 잠시 후 다시 시도하세요.', true); return; }
+    state.masterPin = pin; state.masterOk = true; store.set('master_pin', pin);
+    $('master-input').value = ''; setStatus('마스터 모드가 켜졌습니다. 경기 기록과 멤버 목록에 수정·삭제 버튼이 나타납니다.'); renderAll();
+  });
+  $('master-logout').addEventListener('click', () => { clearMaster(); state.editingId && endEdit(); setStatus('마스터 모드를 껐습니다.'); renderAll(); });
+  $('master-link').addEventListener('click', () => { showTab('mem'); window.scrollTo(0, 0); if (!state.masterOk) try { $('master-input').focus(); } catch (e) {} });
+
   // ---------- 입력 폼 ----------
   const isDouble = () => $('t-double').checked;
   function syncType() {
@@ -724,7 +783,8 @@ header .wrap { position: relative; }
       } else {
         const w = f.r.winner === 'A' ? f.teamA : f.teamB;
         const gw = f.r.winner === 'A' ? f.r.gamesA : f.r.gamesB, gl = f.r.winner === 'A' ? f.r.gamesB : f.r.gamesA;
-        p.textContent = `${teamName(w)} 승리 · 게임 ${gw}-${gl}`;
+        const sw = Math.max(f.r.setsA, f.r.setsB), sl = Math.min(f.r.setsA, f.r.setsB);
+        p.textContent = `${teamName(w)} 승리 · 게임 ${gw}-${gl}` + (f.sets.length > 1 ? ` (세트 ${sw}-${sl})` : '');
       }
       p.className = 'preview ok';
     } catch (e) { p.textContent = e.message; p.className = 'preview err'; }
@@ -741,7 +801,7 @@ header .wrap { position: relative; }
       p_sets: f.sets.map(([a, b]) => ({ a, b })), p_entered_by: $('f-by').value || null,
     };
     const ok = editing ? await rpc('update_match', Object.assign({ p_id: editing }, args)) : await rpc('add_match', args);
-    $('save-btn').disabled = !state.pinOk;
+    $('save-btn').disabled = !canWrite();
     if (ok) {
       const summary = `${teamName(f.teamA)} ${R.formatScore(f.sets)} ${teamName(f.teamB)}`;
       if (editing) {
@@ -815,15 +875,15 @@ header .wrap { position: relative; }
     if (b) openPlayer(b.dataset.player);
     const e = ev.target.closest('button[data-edit]');
     if (e) {
-      if (state.pinOk) startEdit(e.dataset.edit);
-      else { state.pendingEdit = e.dataset.edit; askPin('수정하려면 먼저 위의 클럽 PIN을 입력하세요. 확인하면 바로 수정 화면으로 넘어갑니다.'); }
+      if (state.masterOk) startEdit(e.dataset.edit);
+      else setStatus(ERRORS.bad_master, true);
     }
   });
   const rerenderBoards = () => { renderLog(); renderPlayer(); };
   document.addEventListener('click', async (ev) => {
     const t = ev.target.closest('#log button, #player-detail button'); if (!t || t.dataset.edit) return;
     if (t.dataset.del) {
-      if (!state.pinOk) { askPin('삭제하려면 먼저 위의 클럽 PIN을 입력하세요.'); return; }
+      if (!state.masterOk) { setStatus(ERRORS.bad_master, true); return; }
       state.pendingDelete = t.dataset.del; rerenderBoards();
     }
     else if (t.hasAttribute('data-del-cancel')) { state.pendingDelete = null; rerenderBoards(); }
@@ -844,7 +904,7 @@ header .wrap { position: relative; }
     const t = ev.target.closest('button'); if (!t) return;
     const d = t.dataset;
     if (d.memEdit || d.memDel) {
-      if (!state.pinOk) { askPin(d.memEdit ? '이름을 수정하려면 먼저 위의 클럽 PIN을 입력하세요.' : '멤버를 삭제하려면 먼저 위의 클럽 PIN을 입력하세요.'); return; }
+      if (!state.masterOk) { setStatus(ERRORS.bad_master, true); return; }
       if (d.memDel && state.matches.some((m) => m.teamA.includes(d.memDel) || m.teamB.includes(d.memDel))) {
         setStatus('경기 기록이 있는 멤버는 삭제할 수 없습니다. 그 멤버의 경기를 먼저 삭제하거나, 이름 수정을 이용하세요.', true); return;
       }
@@ -876,6 +936,15 @@ header .wrap { position: relative; }
     const w = Number($('s-win').value), d = Number($('s-draw').value), l = Number($('s-loss').value);
     if (![w, d, l].every(Number.isInteger) || w < d || d < l || l < 0 || w > 10) { setStatus(ERRORS.bad_points, true); return; }
     if (await rpc('set_points', { p_win: w, p_draw: d, p_loss: l })) setStatus('승점 규칙을 저장했습니다.');
+  });
+  $('newmaster-form').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const np = $('s-newmaster').value.trim();
+    if (!/^[0-9]{6,12}$/.test(np)) { setStatus(ERRORS.bad_new_master, true); return; }
+    if (await rpc('change_master_pin', { p_new_pin: np })) {
+      state.masterPin = np; store.set('master_pin', np); $('s-newmaster').value = '';
+      setStatus('마스터 PIN을 변경했습니다. 새 PIN을 잊지 않도록 따로 적어 두세요.');
+    }
   });
   $('newpin-form').addEventListener('submit', async (ev) => {
     ev.preventDefault();
@@ -936,7 +1005,7 @@ header .wrap { position: relative; }
 
 
   // ---------- 새 버전 확인 ----------
-  const APP_VERSION = '2026.10.14-7';
+  const APP_VERSION = '2026.10.14-8';
   async function checkVersion() {
     try {
       const res = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
@@ -965,6 +1034,10 @@ header .wrap { position: relative; }
   }
   state.sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseKey, { auth: { persistSession: false } });
   loadAll();
+  if (state.masterPin) verifyMaster(state.masterPin).then((err) => {
+    if (!err) { state.masterOk = true; renderAll(); }
+    else if (err === 'bad_master') clearMaster();
+  });
   if (state.pin) verifyPin(state.pin).then((err) => {
     if (!err) { state.pinOk = true; renderAll(); }
     else if (err === 'bad_pin') { state.pin = null; store.set('club_pin', null); }
