@@ -254,7 +254,10 @@ header .wrap { position: relative; }
       </div>
       <div class="notice edit-banner" id="edit-banner" hidden>
         <span id="edit-desc"></span>
-        <button class="btn ghost" type="button" id="edit-cancel">수정 취소</button>
+        <span class="acts" style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn danger" type="button" id="edit-delete">이 경기 삭제</button>
+          <button class="btn ghost" type="button" id="edit-cancel">수정 취소</button>
+        </span>
       </div>
       <div class="panel">
         <form id="match-form" autocomplete="off">
@@ -547,7 +550,7 @@ header .wrap { position: relative; }
     el.innerHTML = [...byDay].map(([date, ms]) => `<div class="day"><h3>${esc(date)}</h3>${ms.map(boardHtml).join('')}</div>`).join('');
   }
 
-  function boardHtml(m, readonly) {
+  function boardHtml(m, showDate) {
     let r; try { r = R.decideWinner(m.sets); } catch (e) { return ''; }
     const line = (ids, side) => {
       const won = r.winner === side;
@@ -560,11 +563,11 @@ header .wrap { position: relative; }
     const by = (m.enteredBy ? ` · 입력: ${esc(memberName(m.enteredBy))}` : '') + (m.edited ? ' · 수정됨' : '');
     const confirming = state.pendingDelete === m.id;
     const editBtn = `<button class="btn ghost" data-edit="${esc(m.id)}">수정</button>`;
-    const acts = readonly ? editBtn : (confirming && state.pinOk)
+    const acts = (confirming && state.pinOk)
       ? `<button class="btn danger" data-del-confirm="${esc(m.id)}">삭제 확인</button><button class="btn ghost" data-del-cancel>취소</button>`
       : editBtn + `<button class="btn ghost" data-del="${esc(m.id)}">삭제</button>`;
     return `<article class="board">${line(m.teamA, 'A')}${line(m.teamB, 'B')}
-      <div class="meta"><span>${readonly ? esc(m.date) + ' · ' : ''}${m.teamA.length > 1 ? '복식' : '단식'}${by}</span><span class="acts">${acts}</span></div></article>`;
+      <div class="meta"><span>${showDate ? esc(m.date) + ' · ' : ''}${m.teamA.length > 1 ? '복식' : '단식'}${by}</span><span class="acts">${acts}</span></div></article>`;
   }
 
   function renderMembers() {
@@ -744,6 +747,23 @@ header .wrap { position: relative; }
     updatePreview();
   }
   $('edit-cancel').addEventListener('click', () => { endEdit(); showTab('log'); });
+  let editDeleteArmed = false;
+  $('edit-delete').addEventListener('click', async () => {
+    if (!state.editingId) return;
+    if (!editDeleteArmed) {
+      editDeleteArmed = true;
+      $('edit-delete').textContent = '정말 삭제할까요? 한 번 더 누르세요';
+      setTimeout(() => { editDeleteArmed = false; $('edit-delete').textContent = '이 경기 삭제'; }, 4000);
+      return;
+    }
+    editDeleteArmed = false; $('edit-delete').textContent = '이 경기 삭제';
+    const id = state.editingId;
+    if (await rpc('remove_match', { p_id: id })) {
+      endEdit(); showTab('log');
+      setStatus('경기를 삭제했습니다.');
+      setTimeout(() => { if ($('status').textContent === '경기를 삭제했습니다.') setStatus(''); }, 4000);
+    }
+  });
 
   $('log-filter').addEventListener('change', renderLog);
   $('rank-month').addEventListener('change', renderStandings);
@@ -758,13 +778,14 @@ header .wrap { position: relative; }
       else { state.pendingEdit = e.dataset.edit; askPin('수정하려면 먼저 위의 클럽 PIN을 입력하세요. 확인하면 바로 수정 화면으로 넘어갑니다.'); }
     }
   });
-  $('log').addEventListener('click', async (ev) => {
-    const t = ev.target.closest('button'); if (!t || t.dataset.edit) return;
+  const rerenderBoards = () => { renderLog(); renderPlayer(); };
+  document.addEventListener('click', async (ev) => {
+    const t = ev.target.closest('#log button, #player-detail button'); if (!t || t.dataset.edit) return;
     if (t.dataset.del) {
       if (!state.pinOk) { askPin('삭제하려면 먼저 위의 클럽 PIN을 입력하세요.'); return; }
-      state.pendingDelete = t.dataset.del; renderLog();
+      state.pendingDelete = t.dataset.del; rerenderBoards();
     }
-    else if (t.hasAttribute('data-del-cancel')) { state.pendingDelete = null; renderLog(); }
+    else if (t.hasAttribute('data-del-cancel')) { state.pendingDelete = null; rerenderBoards(); }
     else if (t.dataset.delConfirm) {
       const id = t.dataset.delConfirm; state.pendingDelete = null;
       await rpc('remove_match', { p_id: id });
