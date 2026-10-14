@@ -397,11 +397,11 @@ header .wrap { position: relative; }
     </section>
   </div>
 </main>
-<footer class="ver wrap">클럽 테니스 랭킹 · 버전 <span id="app-ver">2026.10.14-8</span> · <button type="button" class="namelink" id="master-link" style="font-size:12px;font-weight:500;color:var(--muted)">마스터</button></footer>
+<footer class="ver wrap">클럽 테니스 랭킹 · 버전 <span id="app-ver">2026.10.14-9</span> · <button type="button" class="namelink" id="master-link" style="font-size:12px;font-weight:500;color:var(--muted)">마스터</button></footer>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="config.js?v=2026.10.14-8"></script>
-<script src="ranking.js?v=2026.10.14-8"></script>
+<script src="config.js?v=2026.10.14-9"></script>
+<script src="ranking.js?v=2026.10.14-9"></script>
 <script>
 (function () {
   'use strict';
@@ -979,10 +979,17 @@ header .wrap { position: relative; }
     btn.addEventListener('click', async () => {
       if (deferred) { deferred.prompt(); await deferred.userChoice.catch(() => {}); deferred = null; btn.hidden = true; return; }
       if (isKakao) {
-        const ext = 'kakaotalk://web/openExternal?url=' + encodeURIComponent(location.href.split('#')[0]);
+        const pageUrl = location.origin + location.pathname;
+        // 안드로이드: Chrome 앱을 직접 지정해서 엽니다. 아이폰: 카카오톡의 외부 브라우저 열기.
+        const ext = isIOS
+          ? 'kakaotalk://web/openExternal?url=' + encodeURIComponent(pageUrl)
+          : 'intent://' + location.host + location.pathname + '#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=' + encodeURIComponent(pageUrl) + ';end';
+        const browser = isIOS ? 'Safari' : 'Chrome';
         showHelp(`<strong>카카오톡 안에서는 앱을 설치할 수 없습니다</strong>
-          <span>${isIOS ? 'Safari' : 'Chrome'}에서 열어 설치해 주세요. 아래 버튼이 안 되면 오른쪽 ${isIOS ? '아래' : '위'} 메뉴(⋯ 또는 ⋮)에서 <b>다른 브라우저로 열기</b>를 누르세요.</span>
-          <div class="acts"><a class="btn" href="${ext}">${isIOS ? 'Safari' : 'Chrome'}로 열기</a>${closeBtn}</div>`);
+          <span>① 아래 <b>${browser}로 열기</b>를 누르세요.</span>
+          <span>② ${browser}에서 페이지가 열리면 오른쪽 위 노란 <b>앱 설치</b> 버튼을 다시 누르세요.</span>
+          <div class="acts"><a class="btn" href="${ext}">${browser}로 열기</a><button type="button" class="btn ghost" data-copy-url>주소 복사</button>${closeBtn}</div>
+          <span class="hint">${browser}가 열리지 않으면: 오른쪽 ${isIOS ? '아래' : '위'} 메뉴(⋯ 또는 ⋮) → <b>다른 브라우저로 열기</b>를 누르거나, <b>주소 복사</b> 후 ${browser} 주소창에 붙여 넣으세요.<br><span style="user-select:all">${pageUrl}</span></span>`);
         return;
       }
       if (isIOS) {
@@ -994,18 +1001,31 @@ header .wrap { position: relative; }
           <div class="acts">${closeBtn}</div>`);
         return;
       }
-      showHelp(`<strong>휴대폰에 설치하기</strong>
-        <ol><li>Chrome 오른쪽 위 <b>⋮ 메뉴</b>를 누릅니다.</li><li><b>앱 설치</b> 또는 <b>홈 화면에 추가</b>를 누릅니다.</li></ol>
+      const samsung = /SamsungBrowser/i.test(ua);
+      showHelp(samsung ? `<strong>삼성 인터넷에서 설치하기</strong>
+        <ol><li>화면 아래 <b>≡ 메뉴</b>를 누릅니다.</li><li><b>현재 페이지 추가</b> → <b>홈 화면</b>을 누릅니다.</li><li><b>추가</b>를 누르면 홈 화면에 아이콘이 생깁니다.</li></ol>
+        <div class="acts">${closeBtn}</div>` : `<strong>휴대폰에 설치하기</strong>
+        <ol><li>Chrome 오른쪽 위 <b>⋮ 메뉴</b>를 누릅니다.</li>
+        <li><b>앱 설치</b> 또는 <b>홈 화면에 추가</b>를 누릅니다. (메뉴를 조금 내려야 보일 수 있습니다)</li>
+        <li><b>설치</b>(또는 <b>추가</b>)를 누르면 홈 화면에 테니스공 아이콘이 생깁니다.</li></ol>
+        <span class="hint">메뉴에 없으면 페이지를 새로고침한 뒤 몇 초 기다렸다가 다시 열어 보세요. 이미 설치되어 있으면 메뉴에 <b>앱 열기</b>로 나옵니다.</span>
         <div class="acts">${closeBtn}</div>`);
     });
-    help.addEventListener('click', (e) => { if (e.target.closest('[data-install-close]')) help.hidden = true; });
+    help.addEventListener('click', async (e) => {
+      if (e.target.closest('[data-install-close]')) help.hidden = true;
+      const c = e.target.closest('[data-copy-url]');
+      if (c) {
+        try { await navigator.clipboard.writeText(location.origin + location.pathname); c.textContent = '복사됨'; }
+        catch (err) { c.textContent = '아래 주소를 길게 눌러 복사'; }
+      }
+    });
     // 일반 브라우저에서 설치 이벤트가 늦게 오는 경우를 대비해 안드로이드에서는 안내 버튼을 보여 줍니다.
     if (/Android/i.test(ua)) setTimeout(() => { btn.hidden = false; }, 3000);
   })();
 
 
   // ---------- 새 버전 확인 ----------
-  const APP_VERSION = '2026.10.14-8';
+  const APP_VERSION = '2026.10.14-9';
   async function checkVersion() {
     try {
       const res = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
