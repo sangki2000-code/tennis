@@ -153,3 +153,17 @@ begin
 end ';
 -- club_add_match / club_update_match 는 위 검사를 private.check_match 호출로 바꿨습니다(동점 세트 허용).
 -- club_set_points(p_pin, p_win, p_draw, p_loss): 승리 >= 무승부 >= 패배 를 검사합니다.
+
+-- 멤버 이름 수정 (2026-10-14 추가)
+create or replace function public.club_rename_member(p_pin text, p_id uuid, p_name text) returns jsonb
+language plpgsql security definer set search_path = '' as '
+declare v_err text := private.pin_error(p_pin); v_name text := btrim(p_name); v_n int;
+begin
+  if v_err is not null then return jsonb_build_object(''error'', v_err); end if;
+  if v_name is null or char_length(v_name) not between 1 and 20 then raise exception ''bad_name''; end if;
+  if exists (select 1 from public.members where name = v_name and id <> p_id) then raise exception ''duplicate_member''; end if;
+  update public.members set name = v_name where id = p_id and deleted_at is null;
+  get diagnostics v_n = row_count;
+  if v_n = 0 then raise exception ''member_not_found''; end if;
+  return jsonb_build_object(''ok'', true);
+end ';

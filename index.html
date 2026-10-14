@@ -146,8 +146,15 @@ fieldset { border: none; padding: 0; margin: 0; display: flex; gap: 8px; flex-wr
 
 /* 멤버 */
 .members { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; margin: 0; padding: 0; }
-.members li { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 4px 6px 4px 12px; }
-.members li button { border: none; background: transparent; color: var(--muted); cursor: pointer; font-size: 16px; line-height: 1; padding: 2px 6px; border-radius: 50%; }
+.members { display: grid !important; gap: 0 !important; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+.members li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+.members li:last-child { border-bottom: none; }
+.members .mname { font-weight: 600; flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.members .mcount { color: var(--muted); font-size: 13px; }
+.members .macts { display: flex; gap: 6px; }
+.members input { flex: 1 1 140px; width: auto; }
+.update-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; border-color: var(--court); font-weight: 600; }
+footer.ver { color: var(--muted); font-size: 12px; text-align: center; padding-block: 0 32px; }
 .inline-form { display: flex; gap: 8px; flex-wrap: wrap; }
 .inline-form input { flex: 1 1 160px; width: auto; }
 .empty { text-align: center; padding: 28px 16px; color: var(--muted); }
@@ -199,6 +206,10 @@ header .wrap { position: relative; }
 
 <main>
   <div class="wrap">
+    <div id="update-bar" class="notice update-bar" hidden>
+      <span>새 버전이 있습니다. 업데이트하면 최신 기능이 반영됩니다.</span>
+      <button class="btn" type="button" id="update-btn">지금 업데이트</button>
+    </div>
     <div id="status" class="notice" hidden></div>
     <div id="install-help" class="notice install-help" hidden></div>
     <form class="pinbar" id="pin-form" autocomplete="off">
@@ -317,7 +328,7 @@ header .wrap { position: relative; }
     <section role="tabpanel" id="p-mem" aria-labelledby="tab-mem" hidden>
       <div>
         <h2>멤버</h2>
-        <p class="hint">경기 기록이 있는 멤버는 삭제할 수 없습니다.</p>
+        <p class="hint">이름 수정·삭제는 클럽 PIN이 필요합니다. 경기 기록이 있는 멤버는 삭제할 수 없습니다(이름 수정은 가능).</p>
       </div>
       <form class="inline-form" id="member-form">
         <input type="text" id="m-name" placeholder="이름" maxlength="20" aria-label="새 멤버 이름" required>
@@ -359,10 +370,11 @@ header .wrap { position: relative; }
     </section>
   </div>
 </main>
+<footer class="ver wrap">클럽 테니스 랭킹 · 버전 <span id="app-ver">2026.10.14-6</span></footer>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="config.js"></script>
-<script src="ranking.js"></script>
+<script src="config.js?v=2026.10.14-6"></script>
+<script src="ranking.js?v=2026.10.14-6"></script>
 <script>
 (function () {
   'use strict';
@@ -388,13 +400,14 @@ header .wrap { position: relative; }
     duplicate_member: '같은 이름의 멤버가 이미 있습니다.',
     member_has_matches: '경기 기록이 있는 멤버는 삭제할 수 없습니다.',
     match_not_found: '이 경기는 이미 삭제되었습니다. 경기 기록을 다시 확인하세요.',
+    member_not_found: '이 멤버는 이미 삭제되었습니다.',
     bad_points: '승점은 승리 ≥ 무승부 ≥ 패배 순서로, 0~10점 사이로 정하세요.',
     bad_new_pin: '새 PIN은 숫자 4~8자리로 입력하세요.',
   };
 
   const state = {
     sb: null, pin: store.get('club_pin'), pinOk: false,
-    loaded: false, members: [], matches: [], settings: Object.assign({}, R.DEFAULT_SETTINGS), pendingDelete: null, editingId: null, pendingEdit: null,
+    loaded: false, members: [], matches: [], settings: Object.assign({}, R.DEFAULT_SETTINGS), pendingDelete: null, editingId: null, pendingEdit: null, memberEdit: null, memberEditName: '', memberDel: null,
   };
 
   // ---------- 탭 ----------
@@ -578,11 +591,25 @@ header .wrap { position: relative; }
   }
 
   function renderMembers() {
-    const used = new Set(state.matches.flatMap((m) => m.teamA.concat(m.teamB)));
     const ul = $('members');
     if (!state.members.length) ul.innerHTML = '<li class="hint" style="border:none;background:none">아직 멤버가 없습니다. 위에서 이름을 입력해 추가하세요.</li>';
-    else ul.innerHTML = state.members.map((m) => `<li>${esc(m.name)}${state.pinOk && !used.has(m.id)
-      ? `<button type="button" data-rm="${esc(m.id)}" aria-label="${esc(m.name)} 삭제" title="삭제">×</button>` : ''}</li>`).join('');
+    else {
+      const counts = new Map();
+      state.matches.forEach((m) => m.teamA.concat(m.teamB).forEach((id) => counts.set(id, (counts.get(id) || 0) + 1)));
+      ul.innerHTML = state.members.map((m) => {
+        const id = esc(m.id);
+        if (state.memberEdit === m.id) {
+          return `<li><input type="text" id="member-edit-input" maxlength="20" value="${esc(state.memberEditName)}" aria-label="새 이름">
+            <span class="macts"><button class="btn" type="button" data-mem-save="${id}">저장</button><button class="btn ghost" type="button" data-mem-cancel>취소</button></span></li>`;
+        }
+        const acts = state.memberDel === m.id
+          ? `<button class="btn danger" type="button" data-mem-del-confirm="${id}">삭제 확인</button><button class="btn ghost" type="button" data-mem-cancel>취소</button>`
+          : `<button class="btn ghost" type="button" data-mem-edit="${id}">이름 수정</button><button class="btn ghost" type="button" data-mem-del="${id}">삭제</button>`;
+        return `<li><span class="mname">${esc(m.name)}</span><span class="mcount">${counts.get(m.id) || 0}경기</span><span class="macts">${acts}</span></li>`;
+      }).join('');
+      const inp = $('member-edit-input');
+      if (inp) { inp.addEventListener('input', () => { state.memberEditName = inp.value; }); if (state.memberEditFocus) { inp.focus(); inp.select(); state.memberEditFocus = false; } }
+    }
     if (document.activeElement !== $('s-win')) $('s-win').value = state.settings.winPoints;
     if (document.activeElement !== $('s-loss')) $('s-loss').value = state.settings.lossPoints;
     if (document.activeElement !== $('s-draw')) $('s-draw').value = state.settings.drawPoints;
@@ -812,8 +839,35 @@ header .wrap { position: relative; }
     if (await rpc('add_member', { p_name: name })) $('m-name').value = '';
   });
   $('members').addEventListener('click', async (ev) => {
-    const t = ev.target.closest('button[data-rm]'); if (!t) return;
-    await rpc('remove_member', { p_id: t.dataset.rm });
+    const t = ev.target.closest('button'); if (!t) return;
+    const d = t.dataset;
+    if (d.memEdit || d.memDel) {
+      if (!state.pinOk) { askPin(d.memEdit ? '이름을 수정하려면 먼저 위의 클럽 PIN을 입력하세요.' : '멤버를 삭제하려면 먼저 위의 클럽 PIN을 입력하세요.'); return; }
+      if (d.memDel && state.matches.some((m) => m.teamA.includes(d.memDel) || m.teamB.includes(d.memDel))) {
+        setStatus('경기 기록이 있는 멤버는 삭제할 수 없습니다. 그 멤버의 경기를 먼저 삭제하거나, 이름 수정을 이용하세요.', true); return;
+      }
+      state.memberEdit = d.memEdit || null; state.memberDel = d.memDel || null;
+      if (d.memEdit) { state.memberEditName = memberName(d.memEdit); state.memberEditFocus = true; }
+      renderMembers(); return;
+    }
+    if (t.hasAttribute('data-mem-cancel')) { state.memberEdit = null; state.memberDel = null; renderMembers(); return; }
+    if (d.memSave) {
+      const name = (state.memberEditName || '').trim();
+      if (!name) { setStatus(ERRORS.bad_name, true); return; }
+      if (state.members.some((m) => m.name === name && m.id !== d.memSave)) { setStatus(ERRORS.duplicate_member, true); return; }
+      if (await rpc('rename_member', { p_id: d.memSave, p_name: name })) { state.memberEdit = null; setStatus(`이름을 “${name}”(으)로 바꿨습니다.`); }
+      return;
+    }
+    if (d.memDelConfirm) {
+      const name = memberName(d.memDelConfirm);
+      state.memberDel = null;
+      if (await rpc('remove_member', { p_id: d.memDelConfirm })) setStatus(`${name} 멤버를 삭제했습니다.`);
+      else renderMembers();
+    }
+  });
+  $('members').addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter' && ev.target.id === 'member-edit-input') { ev.preventDefault(); const b = document.querySelector('[data-mem-save]'); if (b) b.click(); }
+    if (ev.key === 'Escape' && ev.target.id === 'member-edit-input') { state.memberEdit = null; renderMembers(); }
   });
   $('settings-form').addEventListener('submit', async (ev) => {
     ev.preventDefault();
@@ -877,6 +931,28 @@ header .wrap { position: relative; }
     // 일반 브라우저에서 설치 이벤트가 늦게 오는 경우를 대비해 안드로이드에서는 안내 버튼을 보여 줍니다.
     if (/Android/i.test(ua)) setTimeout(() => { btn.hidden = false; }, 3000);
   })();
+
+
+  // ---------- 새 버전 확인 ----------
+  const APP_VERSION = '2026.10.14-6';
+  async function checkVersion() {
+    try {
+      const res = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
+      if (!res.ok) return;
+      const v = (await res.json()).version;
+      if (v && v !== APP_VERSION) { $('update-bar').hidden = false; $('update-bar').dataset.v = v; }
+    } catch (e) {}
+  }
+  $('update-btn').addEventListener('click', async () => {
+    $('update-btn').disabled = true; $('update-btn').textContent = '업데이트 중…';
+    try {
+      if (window.caches) { const keys = await caches.keys(); await Promise.all(keys.map((k) => caches.delete(k))); }
+      if (navigator.serviceWorker) { const regs = await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map((r) => r.update().catch(() => {}))); }
+    } catch (e) {}
+    location.replace(location.pathname + '?v=' + encodeURIComponent($('update-bar').dataset.v || Date.now()));
+  });
+  checkVersion();
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) checkVersion(); });
 
   // ---------- 시작 ----------
   renderAll(); syncType();

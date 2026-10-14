@@ -28,3 +28,7 @@
 - 아이폰: Safari로 열고 공유 버튼 → **홈 화면에 추가**
 - 카카오톡 안에서는 설치가 안 되므로 **앱 설치** 버튼 → Chrome/Safari로 열기
 - `manifest.webmanifest`, `sw.js`, `icons/` 가 설치용 파일입니다.
+
+## 새 버전 배포 시
+`index.html`의 버전 문자열(`APP_VERSION`, 스크립트 `?v=`, 화면 아래 표시)과 `version.json`을 같은 값으로 올리면,
+사용자 화면에 "새 버전이 있습니다 [지금 업데이트]" 안내가 뜹니다.
