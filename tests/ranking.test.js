@@ -148,7 +148,7 @@ test('대진표: rivalry 모드면 네 명일 때 팀 대항전만, mix 모드�
 
 test('대진표: 7명 참석 1코트 — 경기 수가 고르게, 규칙 지킴, 같은 사람 중복 없음', () => {
   const ps = [S, G, M, J, 'w', 'h', 'n'];
-  const d = makeDoublesDraw({ players: ps, rounds: 7, courts: 1, rules, mode: 'mix' });
+  const d = require('../ranking').makeBestDraw({ players: ps, rounds: 7, courts: 1, rules, mode: 'mix' }, 100);
   assert.strictEqual(d.rounds.length, 7);
   const counts = ps.map((p) => d.games.get(p));
   assert.ok(Math.max(...counts) - Math.min(...counts) <= 1, counts.join());
@@ -173,4 +173,51 @@ test('대진표: 8명 2코트 — 한 라운드에 같은 사람이 두 코트�
 
 test('대진표: 4명 미만이면 만들지 않음', () => {
   assert.strictEqual(makeDoublesDraw({ players: [S, G, M], rounds: 3, rules }).error, 'need4');
+});
+
+const { makeBestDraw } = require('../ranking');
+const H = 'H'; // 김성훈
+const rules2 = { partnerOf: { S: [M, G] }, rivalry: { teamA: [S, G], teamB: [M, J] }, preferPairs: [[H, M]] };
+const teamOf = (m, p) => (m.teamA.includes(p) ? m.teamA : m.teamB.includes(p) ? m.teamB : null);
+const paired = (m, x, y) => { const t = teamOf(m, x); return !!t && t.includes(y); };
+
+test('최종 대진: 4명이면 대항전과 대회 준비조가 모두 들어감', () => {
+  for (let t = 0; t < 10; t++) {
+    const d = makeBestDraw({ players: [S, G, M, J], rounds: 4, rules: rules2, mode: 'mix' }, 100);
+    const ms = d.rounds.flat();
+    assert.ok(ms.some((m) => m.rivalry));
+    assert.ok(ms.some((m) => paired(m, S, M)));
+  }
+});
+
+test('최종 대진: 김성훈·김문배가 모두 오면 같은 조 경기가 반드시 있고, 김상기 규칙도 지킴', () => {
+  for (const ps of [[S, G, M, J, H], [S, G, M, J, H, 'w', 'n'], [M, H, 'w', 'n', 'k'], [S, M, H, 'w', 'n']]) {
+    for (let t = 0; t < 10; t++) {
+      const d = makeBestDraw({ players: ps, rounds: ps.length <= 5 ? 5 : 6, courts: 1, rules: rules2, mode: 'mix' }, 150);
+      const ms = d.rounds.flat();
+      assert.ok(ms.some((m) => paired(m, H, M)), 'H·M 같은 조 없음: ' + ps.join());
+      for (const m of ms) {
+        const four = m.teamA.concat(m.teamB);
+        if (four.includes(S) && (four.includes(M) || four.includes(G))) assert.ok(paired(m, S, M) || paired(m, S, G));
+      }
+      const c = [...d.games.values()];
+      // 김상기가 있고 최기웅이 없는 5명이면 김문배가 매 경기 나와야 해서(쉬면 김상기 짝이 없음) 차이 2까지는 불가피
+      const forced = ps.length === 5 && ps.includes(S) && !ps.includes(G);
+      assert.ok(Math.max(...c) - Math.min(...c) <= (forced ? 2 : 1), ps.join() + ' ' + c.join());
+    }
+  }
+});
+
+test('최종 대진: 5명(네 명 + 김성훈)이면 대항전·준비조·성훈문배조 모두 포함', () => {
+  for (let t = 0; t < 10; t++) {
+    const ms = makeBestDraw({ players: [S, G, M, J, H], rounds: 5, courts: 1, rules: rules2, mode: 'mix' }, 200).rounds.flat();
+    assert.ok(ms.some((m) => m.rivalry), 'rivalry');
+    assert.ok(ms.some((m) => paired(m, S, M)), 'prac');
+    assert.ok(ms.some((m) => paired(m, H, M)), 'HM');
+  }
+});
+
+test('규칙 충돌: 상기·문배·성훈 + 1명뿐이면 상기 규칙이 우선(상기·문배 고정)', () => {
+  const d = makeBestDraw({ players: [S, M, H, 'w'], rounds: 3, rules: rules2, mode: 'mix' }, 50);
+  for (const m of d.rounds.flat()) assert.ok(paired(m, S, M));
 });

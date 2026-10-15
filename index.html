@@ -370,11 +370,6 @@ header .wrap { position: relative; }
             <select id="draw-courts"><option value="1">1면</option><option value="2">2면</option></select>
           </div>
         </div>
-        <fieldset class="seg" id="draw-mode-box">
-          <legend id="draw-mode-legend">네 명이 모두 오면</legend>
-          <label><input type="radio" name="draw-mode" id="draw-mode-mix" value="mix" checked> 팀 대항전 + 대회 준비조 번갈아</label>
-          <label><input type="radio" name="draw-mode" id="draw-mode-rivalry" value="rivalry"> 팀 대항전만</label>
-        </fieldset>
         <button class="btn" type="button" id="draw-make">대진표 만들기</button>
       </div>
       <div id="draw-out"></div>
@@ -493,11 +488,11 @@ header .wrap { position: relative; }
     </section>
   </div>
 </main>
-<footer class="ver wrap">법무연수원 테니스 클럽 랭킹 · 버전 <span id="app-ver">2026.10.15-2</span> · <button type="button" class="namelink" id="master-link" style="font-size:12px;font-weight:500;color:var(--muted)">마스터</button></footer>
+<footer class="ver wrap">법무연수원 테니스 클럽 랭킹 · 버전 <span id="app-ver">2026.10.15-3</span> · <button type="button" class="namelink" id="master-link" style="font-size:12px;font-weight:500;color:var(--muted)">마스터</button></footer>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="config.js?v=2026.10.15-2"></script>
-<script src="ranking.js?v=2026.10.15-2"></script>
+<script src="config.js?v=2026.10.15-3"></script>
+<script src="ranking.js?v=2026.10.15-3"></script>
 <script>
 (function () {
   'use strict';
@@ -1196,7 +1191,8 @@ header .wrap { position: relative; }
   // 클럽 규칙 (이름 기준). 바꾸려면 이 부분만 고치면 됩니다.
   const DRAW_RULES = {
     exclude: ['박정기'],                                    // 대진표에서 제외 (초보)
-    partnerOf: { '김상기': ['김문배', '최기웅'] },           // 김상기는 이 중 한 명과만 짝
+    partnerOf: { '김상기': ['김문배', '최기웅'] },           // 김상기는 이 중 한 명과만 짝 (가장 우선하는 규칙)
+    preferPairs: [['김성훈', '김문배']],                    // 둘 다 오면 같은 조 경기를 꼭 넣음
     rivalry: { nameA: '법무연수원', teamA: ['김상기', '최기웅'], nameB: '수지클럽', teamB: ['김문배', '서진호'] },
   };
   const idOf = (name) => (state.members.find((m) => m.name === name) || {}).id;
@@ -1211,7 +1207,8 @@ header .wrap { position: relative; }
   };
   function drawRulesHtml() {
     const r = DRAW_RULES.rivalry;
-    return `<span><b>팀 대항전</b> · ${esc(r.nameA)}(${r.teamA.map(esc).join('·')}) vs ${esc(r.nameB)}(${r.teamB.map(esc).join('·')}) — 네 명이 모두 오면 편성</span>
+    return `<span><b>팀 대항전</b> · ${esc(r.nameA)}(${r.teamA.map(esc).join('·')}) vs ${esc(r.nameB)}(${r.teamB.map(esc).join('·')}) — 네 명이 모두 오면 대항전과 대회 준비조(${esc(r.teamA[0])}·${esc(r.teamB[0])})를 섞어서 편성</span>
+      ${DRAW_RULES.preferPairs.map(([x, y]) => `<span><b>같은 조</b> · ${esc(x)}·${esc(y)} — 둘 다 오면 한 팀 경기를 꼭 넣음</span>`).join('')}
       ${Object.entries(DRAW_RULES.partnerOf).map(([p, a]) => `<span><b>고정 파트너</b> · ${esc(p)}는 ${a.map(esc).join(' 또는 ')}와 짝 (같은 경기에 있을 때)</span>`).join('')}
       <span><b>제외</b> · ${DRAW_RULES.exclude.map(esc).join(', ')} (대진표에만 빠지고 순위·기록은 그대로)</span>`;
   }
@@ -1225,9 +1222,6 @@ header .wrap { position: relative; }
     }).join('');
     const n = [...state.attend].filter((id) => !ex.has(id) && state.members.some((m) => m.id === id)).length;
     $('draw-count').textContent = `${n}명`;
-    const rv = rivalryIds();
-    const allFour = rv && rv.teamA.concat(rv.teamB).every((id) => state.attend.has(id));
-    $('draw-mode-legend').textContent = allFour ? '네 명이 모두 왔습니다 — 방식 선택' : '네 명(김상기·최기웅·김문배·서진호)이 모두 오면';
     if (document.activeElement !== $('draw-rounds') && !$('draw-rounds').value) $('draw-rounds').value = suggestRounds(n, Number($('draw-courts').value));
     renderDrawOut();
   }
@@ -1243,7 +1237,7 @@ header .wrap { position: relative; }
     let no = 0;
     const rows = d.rounds.map((round, ri) => round.map((m, ci) => {
       no++;
-      const tag = m.rivalry ? '<span class="tag riv">팀 대항전</span>' : (m.practice ? '<span class="tag prac">대회 준비조</span>' : '');
+      const tag = m.rivalry ? '<span class="tag riv">팀 대항전</span>' : m.practice ? '<span class="tag prac">대회 준비조</span>' : m.prefer ? '<span class="tag prac">같은 조</span>' : '';
       return `<div class="draw-row"><span class="no">${no}경기</span>
         <span class="vs"><span class="tm">${m.teamA.map(nm).map(esc).join('·')}</span> <span class="hint">vs</span> <span class="tm">${m.teamB.map(nm).map(esc).join('·')}</span>${tag}
           ${round.length > 1 ? `<small>${ri + 1}라운드 · 코트 ${ci + 1}</small>` : ''}</span>
@@ -1264,7 +1258,7 @@ header .wrap { position: relative; }
     let no = 0;
     const lines = d.rounds.flatMap((round, ri) => round.map((m, ci) => {
       no++;
-      const tag = m.rivalry ? ' (팀 대항전)' : (m.practice ? ' (대회 준비조)' : '');
+      const tag = m.rivalry ? ' (팀 대항전)' : m.practice ? ' (대회 준비조)' : m.prefer ? ' (같은 조)' : '';
       return `${no}경기${round.length > 1 ? ` [코트${ci + 1}]` : ''}  ${m.teamA.map(memberName).join('·')} vs ${m.teamB.map(memberName).join('·')}${tag}`;
     }));
     const counts = Object.entries(d.games).sort((a, b) => b[1] - a[1]).map(([id, g]) => `${memberName(id)} ${g}`).join(', ');
@@ -1280,22 +1274,23 @@ header .wrap { position: relative; }
     }
     const courts = Number($('draw-courts').value) || 1;
     const rounds = Math.max(1, Math.min(20, Number($('draw-rounds').value) || suggestRounds(players.length, courts)));
-    const mode = $('draw-mode-rivalry').checked ? 'rivalry' : 'mix';
     const ratings = R.computeElo(state.members, state.matches);
-    const res = R.makeDoublesDraw({ players, rounds, courts, rules: { partnerOf, rivalry: rivalryIds() }, mode, ratings });
+    const preferPairs = DRAW_RULES.preferPairs.map(([x, y]) => [idOf(x), idOf(y)]).filter(([x, y]) => x && y);
+    const res = R.makeBestDraw({ players, rounds, courts, rules: { partnerOf, rivalry: rivalryIds(), preferPairs }, mode: 'mix', ratings }, 300);
     if (!res.rounds.length) { setStatus('규칙에 맞는 대진을 만들 수 없습니다. 참석자를 확인하세요.', true); return; }
     // 대회 준비조 표시: 고정 파트너 규칙의 사람이 첫 번째 지정 파트너(김문배)와 짝인 경기
     const prepPairs = Object.entries(partnerOf).map(([p, a]) => [p, a[0]]);
     // 보기 좋게 정렬: 규칙에 나온 사람(김상기·최기웅·김문배·서진호 순)이 앞에, 그 사람이 있는 팀이 왼쪽에
     const rv = rivalryIds();
-    const order = [...Object.keys(partnerOf), ...(rv ? rv.teamA.concat(rv.teamB) : [])];
+    const order = [...Object.keys(partnerOf), ...(rv ? rv.teamA.concat(rv.teamB) : []), ...preferPairs.flat()];
     const pri = (id) => { const i = order.indexOf(id); return i < 0 ? 99 : i; };
     const sortTeam = (t) => t.slice().sort((x, y) => pri(x) - pri(y) || memberName(x).localeCompare(memberName(y), 'ko'));
     const rounds2 = res.rounds.map((round) => round.map((m) => {
       let a = sortTeam(m.teamA), b = sortTeam(m.teamB);
       if (pri(b[0]) < pri(a[0])) [a, b] = [b, a];
       return { ...m, teamA: a, teamB: b,
-        practice: !m.rivalry && prepPairs.some(([p, q]) => [a, b].some((t) => t.includes(p) && t.includes(q))) };
+        practice: !m.rivalry && prepPairs.some(([p, q]) => [a, b].some((t) => t.includes(p) && t.includes(q))),
+        prefer: preferPairs.some(([p, q]) => [a, b].some((t) => t.includes(p) && t.includes(q))) };
     }));
     state.draw = { date: today(), rounds: rounds2, games: Object.fromEntries(res.games) };
     store.set('draw', JSON.stringify(state.draw));
@@ -1409,7 +1404,7 @@ header .wrap { position: relative; }
   });
 
   // ---------- 새 버전 확인 ----------
-  const APP_VERSION = '2026.10.15-2';
+  const APP_VERSION = '2026.10.15-3';
   async function checkVersion() {
     try {
       const res = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });

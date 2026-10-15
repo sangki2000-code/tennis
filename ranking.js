@@ -210,6 +210,7 @@
     const rnd = opts.random || Math.random;
     const mode = opts.mode || 'mix';
     const rv = rules.rivalry && rules.rivalry.teamA && rules.rivalry.teamB ? rules.rivalry : null;
+    const preferPairs = (rules.preferPairs || []).filter(([x, y]) => opts.players.includes(x) && opts.players.includes(y));
     const rvAll = rv ? rv.teamA.concat(rv.teamB) : [];
     if (players.length < 4) return { rounds: [], games: new Map(), error: 'need4' };
 
@@ -246,6 +247,12 @@
         let sc = Math.abs((rate(t1[0]) + rate(t1[1])) / 2 - (rate(t2[0]) + rate(t2[1])) / 2) / 40;
         sc += 3 * ((partnered.get(key(t1[0], t1[1])) || 0) + (partnered.get(key(t2[0], t2[1])) || 0));
         for (const x of t1) for (const y of t2) sc += 0.5 * (faced.get(key(x, y)) || 0);
+        for (const [x, y] of preferPairs) {
+          if (!four.includes(x) || !four.includes(y)) continue;
+          const together = (t1.includes(x) && t1.includes(y)) || (t2.includes(x) && t2.includes(y));
+          const done = partnered.get(key(x, y)) || 0;
+          if (together) sc -= done === 0 ? 8 : 3;
+        }
         if (allRv) {
           const riv = isRivalry(t1, t2);
           if (mode === 'rivalry' && !riv) continue;
@@ -287,10 +294,54 @@
       return best;
     }
 
+    // 고정 파트너 규칙을 지키는 선택인지 (그 사람이 있으면 참석한 허용 파트너 중 한 명도 있어야 함)
+    function selValid(sel) {
+      for (const [p, allowed] of Object.entries(partnerOf)) {
+        if (!sel.includes(p)) continue;
+        if (allowed.some((a) => players.includes(a)) && !allowed.some((a) => sel.includes(a))) return false;
+      }
+      return true;
+    }
+    // 탐색용: 경기 수가 적은 사람일수록 뽑힐 확률이 높게, 무작위로 뽑기
+    function sampleSel() {
+      for (let t = 0; t < 40; t++) {
+        const pool = players.slice(), pick = [];
+        const minG = Math.min(...pool.map((p) => games.get(p)));
+        while (pick.length < courts * 4) {
+          const w = pool.map((p) => Math.exp(-(games.get(p) - minG) * 2.5));
+          let x = rnd() * w.reduce((a, b) => a + b, 0), i = 0;
+          while (i < w.length - 1 && (x -= w[i]) > 0) i++;
+          pick.push(pool.splice(i, 1)[0]);
+        }
+        if (selValid(pick)) return pick;
+      }
+      return null;
+    }
+
     const out = [];
     for (let r = 0; r < rounds; r++) {
       const order = players.slice().sort((x, y) => games.get(x) - games.get(y) || lastRound.get(x) - lastRound.get(y) || rnd() - 0.5);
-      let sel = fixPartners(order.slice(0, courts * 4), players);
+      const explored = opts.explore ? sampleSel() : null;
+      let sel = explored || order.slice(0, courts * 4);
+      for (const [x, y] of (explored ? [] : preferPairs)) {
+        const hasX = sel.includes(x), hasY = sel.includes(y);
+        if (hasX === hasY || rnd() < 0.5) continue;
+        const want = hasX ? y : x;
+        const protectedIds = new Set([x, y, ...Object.keys(partnerOf)]);
+        const out = sel.filter((p) => !protectedIds.has(p)).sort((a, b) => games.get(b) - games.get(a))[0];
+        if (out) sel[sel.indexOf(out)] = want;
+        // 같은 조를 만들려면 고정 파트너 규칙의 사람(예: 김상기)이 이번 경기를 쉬어야 할 때가 있음
+        if (rnd() < 0.5) {
+          for (const [p, allowed] of Object.entries(partnerOf)) {
+            if (!sel.includes(p) || !sel.includes(x) || !sel.includes(y)) continue;
+            const avail = allowed.filter((a) => sel.includes(a));
+            if (!avail.length || !avail.every((a) => a === x || a === y)) continue;
+            const sub = order.find((q) => !sel.includes(q) && !Object.prototype.hasOwnProperty.call(partnerOf, q));
+            if (sub) sel[sel.indexOf(p)] = sub;
+          }
+        }
+      }
+      sel = fixPartners(sel, players);
       let groups = splitIntoGroups(sel);
       if (!groups) { // 규칙상 안 되는 조합이면 다음 후보로 한 명씩 바꿔 가며 시도
         for (let i = courts * 4; i < order.length && !groups; i++) {
@@ -316,5 +367,45 @@
     return { rounds: out, games };
   }
 
-  return { DEFAULT_SETTINGS, parseScore, decideWinner, formatScore, computeStandings, listMonths, filterMatches, memberDetail, computeElo, makeDoublesDraw };
+  // 대진 전체의 점수 (낮을수록 좋음): 경기 수 공평 > 같은 조 실현 > 대항전·준비조 섞기 > 파트너 다양성 > 실력 균형
+  function scoreDraw(draw, opts) {
+    if (!draw.rounds.length) return Infinity;
+    const rules = opts.rules || {};
+    const rating = opts.ratings || new Map();
+    const rate = (id) => (rating.has(id) ? rating.get(id) : 1500);
+    const counts = [...draw.games.values()];
+    let sc = (Math.max(...counts) - Math.min(...counts)) * 20;
+    const matches = draw.rounds.flat();
+    const pairCount = new Map();
+    const k = (a, b) => (a < b ? a + '|' + b : b + '|' + a);
+    for (const m of matches) for (const t of [m.teamA, m.teamB]) pairCount.set(k(t[0], t[1]), (pairCount.get(k(t[0], t[1])) || 0) + 1);
+    for (const [x, y] of (rules.preferPairs || [])) {
+      if (!opts.players.includes(x) || !opts.players.includes(y)) continue;
+      const n = pairCount.get(k(x, y)) || 0;
+      sc += n === 0 ? 60 : -4 * Math.min(n, 2);
+    }
+    const rv = rules.rivalry;
+    if (rv && rv.teamA && rv.teamB && rv.teamA.concat(rv.teamB).every((id) => opts.players.includes(id))) {
+      const riv = matches.filter((m) => m.rivalry).length;
+      const prac = matches.filter((m) => !m.rivalry && Object.entries(rules.partnerOf || {}).some(([p, a]) =>
+        [m.teamA, m.teamB].some((t) => t.includes(p) && t.includes(a[0])))).length;
+      if (riv === 0) sc += 40;
+      if (prac === 0) sc += 40;
+    }
+    for (const n of pairCount.values()) sc += Math.max(0, n - 1) * 2;
+    for (const m of matches) sc += Math.abs((rate(m.teamA[0]) + rate(m.teamA[1])) / 2 - (rate(m.teamB[0]) + rate(m.teamB[1])) / 2) / 40;
+    return sc;
+  }
+  function makeBestDraw(opts, tries) {
+    let best = null, bestScore = Infinity;
+    for (let i = 0; i < (tries || 300); i++) {
+      const d = makeDoublesDraw(Object.assign({}, opts, { explore: i % 2 === 1 }));
+      if (d.error) return d;
+      const sc = scoreDraw(d, opts);
+      if (sc < bestScore) { bestScore = sc; best = d; }
+    }
+    return best;
+  }
+
+  return { DEFAULT_SETTINGS, parseScore, decideWinner, formatScore, computeStandings, listMonths, filterMatches, memberDetail, computeElo, makeDoublesDraw, makeBestDraw };
 });
