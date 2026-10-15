@@ -1,14 +1,14 @@
 {
-  "name": "클럽 테니스 랭킹",
-  "short_name": "테니스 랭킹",
+  "name": "법무연수원 테니스 클럽 랭킹",
+  "short_name": "법무연수원 테니스",
   "description": "테니스 클럽 경기 결과 입력과 실시간 순위",
   "lang": "ko",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#f2f5f8",
-  "theme_color": "#1d5a8c",
+  "background_color": "#f1f7ee",
+  "theme_color": "#3f8f3a",
   "icons": [
     { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
