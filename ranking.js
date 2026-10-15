@@ -411,5 +411,27 @@
     return best;
   }
 
-  return { DEFAULT_SETTINGS, parseScore, decideWinner, formatScore, computeStandings, listMonths, filterMatches, memberDetail, computeElo, computeEloDetail, makeDoublesDraw, makeBestDraw };
+
+  // 경기 날짜별 누적 순위·레이팅 (그날까지 경기를 한 사람끼리 순위)
+  // 반환: { dates: ['2026-10-14', ...], byId: Map(id -> [{ date, rank|null, points, wins, draws, losses, rating }]) }
+  function rankHistory(members, matches, settings) {
+    const dates = [...new Set(matches.map((m) => m.date))].filter(Boolean).sort();
+    const byId = new Map(members.map((m) => [m.id, []]));
+    for (const d of dates) {
+      const upto = matches.filter((m) => m.date <= d);
+      const played = new Set(upto.flatMap((m) => m.teamA.concat(m.teamB)));
+      const st = computeStandings(members.filter((m) => played.has(m.id)), upto, settings);
+      const elo = computeElo(members, upto);
+      const row = new Map(st.map((x) => [x.id, x]));
+      for (const m of members) {
+        const x = row.get(m.id);
+        byId.get(m.id).push(x
+          ? { date: d, rank: x.rank, points: x.points, wins: x.wins, draws: x.draws, losses: x.losses, rating: Math.round(elo.get(m.id)) }
+          : { date: d, rank: null, points: 0, wins: 0, draws: 0, losses: 0, rating: null });
+      }
+    }
+    return { dates, byId };
+  }
+
+  return { DEFAULT_SETTINGS, parseScore, decideWinner, formatScore, computeStandings, listMonths, filterMatches, memberDetail, computeElo, computeEloDetail, makeDoublesDraw, makeBestDraw, rankHistory };
 });

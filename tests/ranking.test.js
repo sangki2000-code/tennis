@@ -263,3 +263,21 @@ test('computeEloDetail: 마지막 변화량과 반영 경기 수', () => {
   assert.deepStrictEqual([d.games.get('a'), d.games.get('b'), d.games.get('d')], [2, 1, 1]);
   assert.strictEqual(d.ratings.get('a') + d.ratings.get('b') + d.ratings.get('c') + d.ratings.get('d'), 6000); // 주고받기라 합계 유지
 });
+
+test('rankHistory: 날짜별 누적 순위·레이팅, 경기 전이면 null', () => {
+  const { rankHistory } = require('../ranking');
+  const members = ['a', 'b', 'c', 'd'].map((id) => ({ id, name: id }));
+  const matches = [
+    { date: '2026-10-01', teamA: ['a'], teamB: ['b'], sets: [[6, 1]] },
+    { date: '2026-10-08', teamA: ['b'], teamB: ['c'], sets: [[6, 2]] },
+    { date: '2026-10-08', teamA: ['b'], teamB: ['a'], sets: [[6, 3]] },
+  ];
+  const h = rankHistory(members, matches, { winPoints: 2, drawPoints: 1, lossPoints: 0 });
+  assert.deepStrictEqual(h.dates, ['2026-10-01', '2026-10-08']);
+  assert.deepStrictEqual(h.byId.get('a').map((x) => x.rank), [1, 2]);
+  assert.deepStrictEqual(h.byId.get('b').map((x) => x.rank), [2, 1]);
+  assert.deepStrictEqual(h.byId.get('c').map((x) => x.rank), [null, 3]);
+  assert.deepStrictEqual(h.byId.get('d').map((x) => x.rank), [null, null]);
+  assert.strictEqual(h.byId.get('a')[0].rating, 1516);
+  assert.deepStrictEqual([h.byId.get('b')[1].wins, h.byId.get('b')[1].losses], [2, 1]);
+});

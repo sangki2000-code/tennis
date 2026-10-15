@@ -39,6 +39,7 @@
   --loss: #b2413d;
   --win-bg: #e3f3ea;
   --loss-bg: #f8e6e5;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a;
   --font-display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
   --font-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
 }
@@ -48,6 +49,7 @@
     --court: #7cc77e; --court-band: #24502a; --on-court: #f1f6fa; --chalk: rgba(255,255,255,.35);
     --ball: #d8e64c; --ball-edge: #8c9520; --win: #52c48e; --loss: #e57d77;
     --win-bg: #133325; --loss-bg: #3a1c1c; color-scheme: dark;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70;
   }
 }
 :root[data-theme="dark"] {
@@ -55,6 +57,7 @@
   --court: #7cc77e; --court-band: #24502a; --on-court: #f1f6fa; --chalk: rgba(255,255,255,.35);
   --ball: #d8e64c; --ball-edge: #8c9520; --win: #52c48e; --loss: #e57d77;
   --win-bg: #133325; --loss-bg: #3a1c1c; color-scheme: dark;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70;
 }
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
@@ -205,6 +208,18 @@ details.more > summary { cursor: pointer; color: var(--court); font-size: 14px; 
 .dday { display: inline-block; font: 700 12px var(--font-body); color: var(--surface); background: var(--court); border-radius: 4px; padding: 1px 6px; margin-left: 6px; vertical-align: 2px; }
 .share-card { display: grid; gap: 10px; }
 .share-card img { width: 100%; max-width: 540px; border-radius: 10px; border: 1px solid var(--line); background: #fff; }
+.chart { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 6px 6px; touch-action: pan-y; }
+.chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.chart .tip { position: absolute; pointer-events: none; background: var(--surface); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; font-size: 13px; box-shadow: 0 4px 14px rgba(0,0,0,.12); white-space: nowrap; z-index: 2; }
+.chart .tip b { font-variant-numeric: tabular-nums; }
+.chart .tip .sw { display: inline-block; width: 10px; height: 3px; border-radius: 2px; vertical-align: 3px; margin-right: 5px; }
+.chart-empty { color: var(--muted); font-size: 14px; padding: 18px 10px; text-align: center; }
+.sel-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.sel-chip { font: 500 13px var(--font-body); border: 1px solid var(--line); background: var(--surface); color: var(--fg); border-radius: 999px; padding: 4px 10px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.sel-chip[aria-pressed="true"] { border-color: var(--fg); font-weight: 600; }
+.sel-chip .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--line); }
+table.hist { min-width: 0; font-size: 13px; }
+table.hist th, table.hist td { padding: 6px 8px; }
 .update-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; border-color: var(--court); font-weight: 600; }
 footer.ver { color: var(--muted); font-size: 12px; text-align: center; padding-block: 0 32px; }
 .inline-form { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -308,6 +323,13 @@ header .wrap { position: relative; }
         </div>
       </div>
       <div id="standings"></div>
+      <div style="display:grid;gap:10px">
+        <h3 class="sec">순위 변동</h3>
+        <p class="hint">경기 날짜마다 그날까지의 순위입니다(위로 갈수록 높은 순위). 이름을 눌러 최대 3명까지 강조해 볼 수 있습니다.</p>
+        <div class="sel-chips" id="bump-chips"></div>
+        <div class="chart" id="bump-chart"></div>
+        <details class="more"><summary>표로 보기</summary><div class="table-scroll" style="margin-top:8px" id="bump-table"></div></details>
+      </div>
       <details class="more"><summary>레이팅이란?</summary>
         <div class="hint" style="margin-top:6px;display:grid;gap:4px">
           <span>상대 실력을 반영한 점수입니다. 모두 1500점에서 시작합니다.</span>
@@ -565,11 +587,11 @@ header .wrap { position: relative; }
     </section>
   </div>
 </main>
-<footer class="ver wrap">법무연수원 테니스 클럽 랭킹 · 버전 <span id="app-ver">2026.10.15-13</span> · <button type="button" class="namelink" id="master-link" style="font-size:12px;font-weight:500;color:var(--muted)">마스터</button></footer>
+<footer class="ver wrap">법무연수원 테니스 클럽 랭킹 · 버전 <span id="app-ver">2026.10.15-14</span> · <button type="button" class="namelink" id="master-link" style="font-size:12px;font-weight:500;color:var(--muted)">마스터</button></footer>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="config.js?v=2026.10.15-13"></script>
-<script src="ranking.js?v=2026.10.15-13"></script>
+<script src="config.js?v=2026.10.15-14"></script>
+<script src="ranking.js?v=2026.10.15-14"></script>
 <script>
 (function () {
   'use strict';
@@ -744,6 +766,7 @@ header .wrap { position: relative; }
         <div class="tile"><div class="k">현재 흐름</div><div class="v">${streak}</div><div class="s">최다 연승 ${d.bestWinStreak}</div></div>
       </div>
 
+      ${playerChartsHtml(id)}
       <h3 class="sec">상대 전적</h3>
       <div class="table-scroll"><table class="small">
         <thead><tr><th class="l">상대</th><th>전체</th><th>승률</th><th>단식</th><th>복식</th><th>게임 득실</th></tr></thead>
@@ -773,6 +796,7 @@ header .wrap { position: relative; }
 
       <h3 class="sec">최근 경기</h3>
       <div class="day">${recent.map((m) => boardHtml(m, true)).join('')}</div>`;
+    wirePlayerCharts(id);
   }
 
   function openPlayer(id) {
@@ -863,7 +887,7 @@ header .wrap { position: relative; }
   function renderAll() {
     // 다시 그려도 입력 중이던 칸의 포커스와 커서 위치를 지킵니다.
     const a = document.activeElement, keepId = a && a.id, sel = a && typeof a.selectionStart === 'number' ? [a.selectionStart, a.selectionEnd] : null;
-    renderSelects(); renderStandings(); renderPlayer(); renderLog(); renderBoard(); renderAttend(); renderDraw(); renderShareDates(); renderMembers(); updatePreview(); applyWriteState();
+    renderSelects(); renderStandings(); renderPlayer(); renderLog(); renderBoard(); renderAttend(); renderDraw(); renderShareDates(); renderBump(); renderMembers(); updatePreview(); applyWriteState();
     if (keepId && document.activeElement !== a) {
       const el = document.getElementById(keepId);
       if (el) { try { el.focus({ preventScroll: true }); if (sel) el.setSelectionRange(sel[0], sel[1]); } catch (e) {} }
@@ -1617,6 +1641,122 @@ header .wrap { position: relative; }
   try { const l = JSON.parse(store.get('ev_last') || 'null'); if (l) { $('ev-time').value = l.time || ''; $('ev-place').value = l.place || ''; } } catch (e) {}
 
 
+
+  // ---------- 순위 변동 그래프 ----------
+  const SERIES_COLORS = ['var(--s1)', 'var(--s2)', 'var(--s3)'];
+  state.bumpSel = (() => { try { return JSON.parse(store.get('bump_sel') || 'null') || null; } catch (e) { return null; } })();
+  const shortDay = (d) => { const dt = new Date(d + 'T00:00:00'); return `${dt.getMonth() + 1}/${dt.getDate()}`; };
+  // 공통 선 그래프 (SVG). series: [{ name, color, values: [number|null] }], context: [[number|null]] (회색 배경선)
+  function lineChartHtml(o) {
+    const W = Math.max(300, Math.round(o.width || 340)), H = o.height || 230;
+    const L = 34, Rr = o.labels ? 64 : 14, T = 12, B = 28;
+    const n = o.dates.length;
+    const x = (i) => (n <= 1 ? L + (W - L - Rr) / 2 : L + (i * (W - L - Rr)) / (n - 1));
+    const y = (v) => { const t = (v - o.yMin) / ((o.yMax - o.yMin) || 1); return o.invert ? T + t * (H - T - B) : H - B - t * (H - T - B); };
+    const path = (vals) => { let d = '', pen = false; vals.forEach((v, i) => { if (v == null) { pen = false; return; } d += `${pen ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`; pen = true; }); return d; };
+    let g = '';
+    for (const t of o.yTicks) g += `<line x1="${L}" x2="${W - Rr}" y1="${y(t)}" y2="${y(t)}" stroke="var(--line)" stroke-width="1"/><text x="${L - 8}" y="${y(t) + 4}" text-anchor="end" font-size="11" fill="var(--muted)">${o.fmtY ? o.fmtY(t) : t}</text>`;
+    const step = Math.max(1, Math.ceil(n / 6));
+    o.dates.forEach((d, i) => { if (i % step === 0 || i === n - 1) g += `<text x="${x(i)}" y="${H - 8}" text-anchor="middle" font-size="11" fill="var(--muted)">${shortDay(d)}</text>`; });
+    for (const vals of (o.context || [])) g += `<path d="${path(vals)}" fill="none" stroke="var(--muted)" stroke-opacity=".28" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+    const ends = [];
+    for (const s0 of o.series) {
+      g += `<path d="${path(s0.values)}" fill="none" stroke="${s0.color}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+      s0.values.forEach((v, i) => { if (v != null) g += `<circle cx="${x(i)}" cy="${y(v)}" r="4.5" fill="${s0.color}" stroke="var(--surface)" stroke-width="2"/>`; });
+      let li = -1; s0.values.forEach((v, i) => { if (v != null) li = i; });
+      if (li >= 0 && o.labels) ends.push({ name: s0.name, color: s0.color, x: x(li), y: y(s0.values[li]) });
+    }
+    // 끝 이름표: 겹치지 않게 14px 간격으로 밀기
+    ends.sort((a, b) => a.y - b.y);
+    for (let i = 1; i < ends.length; i++) if (ends[i].y - ends[i - 1].y < 14) ends[i].y = ends[i - 1].y + 14;
+    for (const e of ends) g += `<text x="${e.x + 9}" y="${e.y + 4}" font-size="12" font-weight="600" fill="var(--fg)">${esc(e.name)}</text>`;
+    // 날짜별 터치 영역 + 세로선
+    g += `<line class="xh" x1="0" x2="0" y1="${T}" y2="${H - B}" stroke="var(--muted)" stroke-dasharray="3 3" visibility="hidden"/>`;
+    o.dates.forEach((d, i) => { const w = n <= 1 ? W - L - Rr : (W - L - Rr) / (n - 1); g += `<rect data-i="${i}" x="${x(i) - w / 2}" y="${T}" width="${w}" height="${H - T - B}" fill="transparent"/>`; });
+    return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(o.aria || '')}">${g}</svg><div class="tip" hidden></div>`;
+  }
+  function wireChart(el, o, tipFor) {
+    const svg = el.querySelector('svg'), tip = el.querySelector('.tip'), xh = el.querySelector('.xh');
+    const show = (ev) => {
+      const r = ev.target.closest && ev.target.closest('rect[data-i]'); if (!r) return;
+      const i = Number(r.dataset.i);
+      const vb = svg.viewBox.baseVal, box = svg.getBoundingClientRect(), k = box.width / vb.width;
+      const cx = (Number(r.getAttribute('x')) + Number(r.getAttribute('width')) / 2);
+      xh.setAttribute('x1', cx); xh.setAttribute('x2', cx); xh.setAttribute('visibility', 'visible');
+      tip.innerHTML = tipFor(i); tip.hidden = false;
+      const left = cx * k + 6 + 12, maxLeft = el.clientWidth - tip.offsetWidth - 4;
+      tip.style.left = Math.max(4, Math.min(left, maxLeft)) + 'px'; tip.style.top = '8px';
+    };
+    const hide = () => { tip.hidden = true; xh.setAttribute('visibility', 'hidden'); };
+    svg.addEventListener('pointermove', show); svg.addEventListener('pointerdown', show); svg.addEventListener('pointerleave', hide);
+  }
+  function renderBump() {
+    const el = $('bump-chart'); if (!el) return;
+    if (!state.loaded) { el.innerHTML = '<div class="chart-empty">불러오는 중…</div>'; return; }
+    const h = R.rankHistory(state.members, state.matches, state.settings);
+    const ranked = state.members.filter((m) => h.byId.get(m.id).some((x) => x.rank != null));
+    if (!h.dates.length) { el.innerHTML = '<div class="chart-empty">경기 기록이 쌓이면 순위 변동이 여기에 그려집니다.</div>'; $('bump-chips').innerHTML = ''; $('bump-table').innerHTML = ''; return; }
+    const last = (id) => h.byId.get(id)[h.dates.length - 1].rank;
+    let sel = (state.bumpSel || []).filter((id) => ranked.some((m) => m.id === id));
+    if (!state.bumpSel) {
+      const me = store.get('entered_by');
+      sel = me && ranked.some((m) => m.id === me) ? [me] : ranked.slice().sort((a, b) => (last(a.id) || 99) - (last(b.id) || 99)).slice(0, 3).map((m) => m.id);
+    }
+    const colorOf = (id) => SERIES_COLORS[sel.indexOf(id)];
+    $('bump-chips').innerHTML = ranked.slice().sort((a, b) => (last(a.id) || 99) - (last(b.id) || 99) || a.name.localeCompare(b.name, 'ko')).map((m) => {
+      const on = sel.includes(m.id);
+      return `<button type="button" class="sel-chip" data-bump="${esc(m.id)}" aria-pressed="${on}"><span class="dot" style="${on ? `background:${colorOf(m.id)}` : ''}"></span>${esc(m.name)}</button>`;
+    }).join('');
+    const maxRank = Math.max(1, ...ranked.flatMap((m) => h.byId.get(m.id).map((x) => x.rank || 0)));
+    const o = {
+      dates: h.dates, invert: true, yMin: 1, yMax: maxRank, labels: true, height: 40 + 24 * Math.min(maxRank, 12),
+      yTicks: Array.from({ length: maxRank }, (_, i) => i + 1).filter((t) => maxRank <= 12 || t === 1 || t % 2 === 1), fmtY: (t) => t + '위',
+      context: ranked.filter((m) => !sel.includes(m.id)).map((m) => h.byId.get(m.id).map((x) => x.rank)),
+      series: sel.map((id) => ({ name: memberName(id), color: colorOf(id), values: h.byId.get(id).map((x) => x.rank) })),
+      width: el.clientWidth - 12, aria: '경기 날짜별 순위 변동 그래프',
+    };
+    el.innerHTML = lineChartHtml(o) + (h.dates.length < 2 ? '<div class="chart-empty" style="padding:4px 0 0">경기 날짜가 2일 이상 쌓이면 선으로 이어집니다.</div>' : '');
+    wireChart(el, o, (i) => `<div>${fmtDay(h.dates[i])}</div>` + (sel.length ? sel : []).map((id) => { const x = h.byId.get(id)[i]; return `<div><span class="sw" style="background:${colorOf(id)}"></span>${esc(memberName(id))} <b>${x.rank ? x.rank + '위' : '–'}</b>${x.rank ? ` <span class="hint">${x.wins}-${x.draws}-${x.losses} · ${x.points}점</span>` : ''}</div>`; }).join('') || '<div class="hint">이름을 눌러 강조해 보세요</div>');
+    // 표로 보기
+    $('bump-table').innerHTML = sel.length ? `<table class="hist"><thead><tr><th class="l">날짜</th>${sel.map((id) => `<th>${esc(memberName(id))}</th>`).join('')}</tr></thead><tbody>${h.dates.map((d, i) => `<tr><td class="l">${fmtDay(d)}</td>${sel.map((id) => { const x = h.byId.get(id)[i]; return `<td>${x.rank ? x.rank + '위 <span class="hint">(' + x.points + '점)</span>' : '–'}</td>`; }).join('')}</tr>`).join('')}</tbody></table>` : '<p class="hint">이름을 골라 주세요.</p>';
+  }
+  $('bump-chips').addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-bump]'); if (!b) return;
+    let sel = [...$('bump-chips').querySelectorAll('[aria-pressed="true"]')].map((x) => x.dataset.bump);
+    const id = b.dataset.bump;
+    if (sel.includes(id)) sel = sel.filter((x) => x !== id);
+    else if (sel.length >= 3) { setStatus('그래프 강조는 3명까지 할 수 있습니다. 먼저 한 명을 빼 주세요.', true); return; }
+    else sel.push(id);
+    state.bumpSel = sel; store.set('bump_sel', JSON.stringify(sel)); setStatus(''); renderBump();
+  });
+  // 선수 기록: 순위·레이팅 변화 (각각 따로)
+  function playerChartsHtml(id) {
+    const h = R.rankHistory(state.members, state.matches, state.settings);
+    const mine = h.byId.get(id) || [];
+    if (!mine.some((x) => x.rank != null)) return '';
+    return `<h3 class="sec">순위 변화</h3><div class="chart" id="pc-rank"></div><h3 class="sec">레이팅 변화</h3><div class="chart" id="pc-rating"></div>`;
+  }
+  function wirePlayerCharts(id) {
+    const a = $('pc-rank'), b = $('pc-rating'); if (!a || !b) return;
+    const h = R.rankHistory(state.members, state.matches, state.settings);
+    const mine = h.byId.get(id);
+    const maxRank = Math.max(1, ...state.members.flatMap((m) => h.byId.get(m.id).map((x) => x.rank || 0)));
+    const oa = { dates: h.dates, invert: true, yMin: 1, yMax: maxRank, height: 40 + 20 * Math.min(maxRank, 10),
+      yTicks: Array.from({ length: maxRank }, (_, i) => i + 1).filter((t) => maxRank <= 10 || t === 1 || t % 2 === 1), fmtY: (t) => t + '위',
+      series: [{ name: memberName(id), color: 'var(--s1)', values: mine.map((x) => x.rank) }], width: a.clientWidth - 12, aria: '순위 변화' };
+    a.innerHTML = lineChartHtml(oa);
+    wireChart(a, oa, (i) => `<div>${fmtDay(h.dates[i])}</div><div><b>${mine[i].rank ? mine[i].rank + '위' : '경기 전'}</b>${mine[i].rank ? ` <span class="hint">${mine[i].wins}-${mine[i].draws}-${mine[i].losses} · ${mine[i].points}점</span>` : ''}</div>`);
+    const rs = mine.map((x) => x.rating).filter((v) => v != null);
+    const lo = Math.floor((Math.min(1500, ...rs) - 10) / 10) * 10, hi = Math.ceil((Math.max(1500, ...rs) + 10) / 10) * 10;
+    const stepY = Math.max(10, Math.ceil((hi - lo) / 4 / 10) * 10);
+    const ticks = []; for (let t = lo; t <= hi; t += stepY) ticks.push(t);
+    const ob = { dates: h.dates, invert: false, yMin: lo, yMax: hi, height: 170, yTicks: ticks,
+      series: [{ name: memberName(id), color: 'var(--s1)', values: mine.map((x) => x.rating) }], width: b.clientWidth - 12, aria: '레이팅 변화' };
+    b.innerHTML = lineChartHtml(ob);
+    wireChart(b, ob, (i) => `<div>${fmtDay(h.dates[i])}</div><div><b>${mine[i].rating != null ? mine[i].rating : '경기 전'}</b></div>`);
+  }
+  window.addEventListener('resize', () => { clearTimeout(window.__rz); window.__rz = setTimeout(() => { renderBump(); const pid = $('player-select') && $('player-select').value; if (pid && $('pc-rank')) wirePlayerCharts(pid); }, 200); });
+
   // ---------- 카톡 공유 이미지 ----------
   function matchDates() { return [...new Set(state.matches.map((m) => m.date))].sort().reverse(); }
   function renderShareDates() {
@@ -1794,7 +1934,7 @@ header .wrap { position: relative; }
   });
 
   // ---------- 새 버전 확인 ----------
-  const APP_VERSION = '2026.10.15-13';
+  const APP_VERSION = '2026.10.15-14';
   async function checkVersion() {
     try {
       const res = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
