@@ -523,5 +523,23 @@
     return { bestPartner: pack(best, best), nemesis: pack(nemesis, nemesis && nemesis.total), favorite: pack(prey, prey && prey.total) };
   }
 
-  return { DEFAULT_SETTINGS, parseScore, decideWinner, formatScore, computeStandings, listMonths, filterMatches, memberDetail, computeElo, computeEloDetail, makeDoublesDraw, makeBestDraw, rankHistory, monthlyAwards, BADGES, playerBadges, partnerSummary };
+  // ---------- 대진표 ↔ 입력된 경기 ----------
+  // games: 대진표 경기 [{teamA, teamB}] (순서대로). 같은 날짜에 같은 두 팀(좌우·순서 무관)의 경기를 하나씩 짝지음.
+  // 결과: 경기마다 { match, flip } 또는 null. flip 이면 입력된 경기의 A/B 가 대진표와 반대.
+  function matchDrawGames(games, matches, date) {
+    const team = (t) => [...t].sort().join(',');
+    const pool = matches.filter((m) => m.date === date)
+      .sort((x, y) => (x.createdAt || 0) - (y.createdAt || 0))
+      .map((m) => ({ m, a: team(m.teamA), b: team(m.teamB) }));
+    const used = new Set();
+    return games.map((g) => {
+      const a = team(g.teamA), b = team(g.teamB);
+      const hit = pool.find((p) => !used.has(p) && ((p.a === a && p.b === b) || (p.a === b && p.b === a)));
+      if (!hit) return null;
+      used.add(hit);
+      return { match: hit.m, flip: hit.a !== a };
+    });
+  }
+
+  return { DEFAULT_SETTINGS, parseScore, decideWinner, formatScore, computeStandings, listMonths, filterMatches, memberDetail, computeElo, computeEloDetail, makeDoublesDraw, makeBestDraw, rankHistory, monthlyAwards, BADGES, playerBadges, partnerSummary, matchDrawGames };
 });

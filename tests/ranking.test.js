@@ -334,3 +334,19 @@ test('partnerSummary: 최고의 파트너·천적·자신 있는 상대', () => 
   assert.equal(s.favorite.id, 'c'); // c 상대 2전 2승
   assert.equal(R.partnerSummary('z', ms).bestPartner, null);
 });
+
+test('matchDrawGames: 같은 날 같은 팀 경기를 하나씩 짝지음 (좌우 무관)', () => {
+  const games = [
+    { teamA: ['a', 'b'], teamB: ['c', 'd'] },
+    { teamA: ['a', 'c'], teamB: ['b', 'd'] },
+    { teamA: ['a', 'b'], teamB: ['c', 'd'] }, // 같은 대진 두 번
+  ];
+  const ms = [
+    { date: '2026-10-17', teamA: ['d', 'c'], teamB: ['b', 'a'], sets: [[6, 4]], createdAt: 1 },
+    { date: '2026-10-16', teamA: ['a', 'c'], teamB: ['b', 'd'], sets: [[6, 1]], createdAt: 2 },
+  ];
+  const r = R.matchDrawGames(games, ms, '2026-10-17');
+  assert.equal(r[0].match, ms[0]); assert.equal(r[0].flip, true);
+  assert.equal(r[1], null); // 다른 날짜
+  assert.equal(r[2], null); // 이미 짝지어진 경기는 다시 쓰지 않음
+});
