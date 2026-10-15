@@ -175,3 +175,12 @@ end ';
 -- 마스터 전용: club_update_match, club_remove_match, club_rename_member, club_remove_member,
 --             club_set_points(4인자), club_change_pin, club_change_master_pin, club_check_master
 -- (예전 3인자 club_set_points 는 항상 bad_master 를 돌려줌)
+
+-- 게시판·댓글 (2026-10-15 추가)
+-- 테이블: public.posts(id, author_id, title, body, pinned, created_at, updated_at, deleted_at)
+--         public.comments(id, target_type 'match'|'post', target_id, author_id, body, created_at, deleted_at)
+-- 둘 다 누구나 읽기만 가능(RLS), 실시간 갱신 대상.
+-- private.check_author(p_author): 멤버인지 확인 (bad_author)
+-- club_add_post(p_pin, p_author, p_title, p_body)            : 클럽 PIN 또는 마스터
+-- club_add_comment(p_pin, p_target_type, p_target_id, p_author, p_body) : 클럽 PIN 또는 마스터, 대상 존재 확인
+-- club_remove_post / club_pin_post / club_remove_comment      : 마스터 전용

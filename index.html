@@ -153,6 +153,22 @@ fieldset { border: none; padding: 0; margin: 0; display: flex; gap: 8px; flex-wr
 .members .mcount { color: var(--muted); font-size: 13px; }
 .members .macts { display: flex; gap: 6px; }
 .members input { flex: 1 1 140px; width: auto; }
+.cmt-toggle { font-size: 13px !important; padding: 4px 10px !important; }
+.thread { display: grid; gap: 8px; border-top: 1px dashed var(--line); padding-top: 8px; margin-top: 2px; }
+.cmt { display: grid; gap: 2px; font-size: 14px; }
+.cmt .cmeta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.cmt .cmeta b { color: var(--fg); font-size: 13px; }
+.cmt .cbody, .post .pbody { white-space: pre-wrap; overflow-wrap: anywhere; }
+.cmt-form { display: grid; grid-template-columns: minmax(0, 8em) minmax(0, 1fr) auto; gap: 6px; align-items: start; }
+@media (max-width: 520px) { .cmt-form { grid-template-columns: minmax(0, 1fr) auto; } .cmt-form select { grid-column: 1 / -1; } }
+textarea { font: 400 15px var(--font-body); color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; width: 100%; min-width: 0; resize: vertical; }
+.posts { display: grid; gap: 12px; }
+.post { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 8px; min-width: 0; }
+.post.pinned { border-color: var(--court); }
+.post h3 { margin: 0; font-size: 17px; overflow-wrap: anywhere; }
+.post .pmeta { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.post .pacts { display: flex; flex-wrap: wrap; gap: 6px; }
+.badge { display: inline-block; font: 600 11px var(--font-body); color: var(--surface); background: var(--court); border-radius: 4px; padding: 1px 6px; margin-right: 6px; vertical-align: 2px; }
 .update-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; border-color: var(--court); font-weight: 600; }
 footer.ver { color: var(--muted); font-size: 12px; text-align: center; padding-block: 0 32px; }
 .inline-form { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -199,6 +215,7 @@ header .wrap { position: relative; }
       <button role="tab" id="tab-player" aria-controls="p-player" aria-selected="false">선수 기록</button>
       <button role="tab" id="tab-add" aria-controls="p-add" aria-selected="false">결과 입력</button>
       <button role="tab" id="tab-log" aria-controls="p-log" aria-selected="false">경기 기록</button>
+      <button role="tab" id="tab-board" aria-controls="p-board" aria-selected="false">게시판</button>
       <button role="tab" id="tab-mem" aria-controls="p-mem" aria-selected="false">멤버 · 설정</button>
     </nav>
   </div>
@@ -325,6 +342,35 @@ header .wrap { position: relative; }
       <div id="log"></div>
     </section>
 
+    <section role="tabpanel" id="p-board" aria-labelledby="tab-board" hidden>
+      <div>
+        <h2>게시판</h2>
+        <p class="hint">공지, 일정, 자유 이야기를 남겨 주세요. 글과 댓글 쓰기는 클럽 PIN이 필요하고, 삭제와 공지 고정은 마스터만 할 수 있습니다.</p>
+      </div>
+      <button class="btn" type="button" id="post-new">글쓰기</button>
+      <form class="panel" id="post-form" autocomplete="off" hidden style="display:grid;gap:10px">
+        <div class="row">
+          <div class="field" style="flex:0 1 160px">
+            <label for="post-by">작성자</label>
+            <select id="post-by"></select>
+          </div>
+          <div class="field">
+            <label for="post-title">제목</label>
+            <input type="text" id="post-title" maxlength="60" placeholder="예: 이번 주 토요일 정기전">
+          </div>
+        </div>
+        <div class="field">
+          <label for="post-body">내용</label>
+          <textarea id="post-body" rows="5" maxlength="2000" placeholder="내용을 입력하세요"></textarea>
+        </div>
+        <div class="row">
+          <button class="btn" type="submit" id="post-save">등록</button>
+          <button class="btn ghost" type="button" id="post-cancel">취소</button>
+        </div>
+      </form>
+      <div class="posts" id="posts"></div>
+    </section>
+
     <section role="tabpanel" id="p-mem" aria-labelledby="tab-mem" hidden>
       <div>
         <h2>마스터</h2>
@@ -397,11 +443,11 @@ header .wrap { position: relative; }
     </section>
   </div>
 </main>
-<footer class="ver wrap">클럽 테니스 랭킹 · 버전 <span id="app-ver">2026.10.14-9</span> · <button type="button" class="namelink" id="master-link" style="font-size:12px;font-weight:500;color:var(--muted)">마스터</button></footer>
+<footer class="ver wrap">클럽 테니스 랭킹 · 버전 <span id="app-ver">2026.10.14-10</span> · <button type="button" class="namelink" id="master-link" style="font-size:12px;font-weight:500;color:var(--muted)">마스터</button></footer>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="config.js?v=2026.10.14-9"></script>
-<script src="ranking.js?v=2026.10.14-9"></script>
+<script src="config.js?v=2026.10.14-10"></script>
+<script src="ranking.js?v=2026.10.14-10"></script>
 <script>
 (function () {
   'use strict';
@@ -428,6 +474,11 @@ header .wrap { position: relative; }
     member_has_matches: '경기 기록이 있는 멤버는 삭제할 수 없습니다.',
     match_not_found: '이 경기는 이미 삭제되었습니다. 경기 기록을 다시 확인하세요.',
     member_not_found: '이 멤버는 이미 삭제되었습니다.',
+    bad_author: '작성자를 선택하세요.',
+    bad_title: '제목은 1~60자로 입력하세요.',
+    bad_body: '내용은 1~2000자로 입력하세요.',
+    bad_comment: '댓글은 1~500자로 입력하세요.',
+    target_not_found: '글이나 경기가 이미 삭제되었습니다. 새로고침하세요.',
     bad_points: '승점은 승리 ≥ 무승부 ≥ 패배 순서로, 0~10점 사이로 정하세요.',
     bad_new_pin: '새 PIN은 숫자 4~8자리로 입력하세요.',
     bad_master: '마스터 PIN이 올바르지 않습니다. 수정·삭제는 마스터만 할 수 있습니다.',
@@ -436,11 +487,12 @@ header .wrap { position: relative; }
 
   const state = {
     sb: null, pin: store.get('club_pin'), pinOk: false, masterPin: store.get('master_pin'), masterOk: false,
+    posts: [], comments: [], openThreads: new Set(), drafts: {}, pendingPostDel: null, pendingCmtDel: null,
     loaded: false, members: [], matches: [], settings: Object.assign({}, R.DEFAULT_SETTINGS), pendingDelete: null, editingId: null, pendingEdit: null, memberEdit: null, memberEditName: '', memberDel: null,
   };
 
   // ---------- 탭 ----------
-  const tabs = ['rank', 'player', 'add', 'log', 'mem'];
+  const tabs = ['rank', 'player', 'add', 'log', 'board', 'mem'];
   function showTab(key) {
     tabs.forEach((k) => {
       $('tab-' + k).setAttribute('aria-selected', String(k === key));
@@ -505,6 +557,7 @@ header .wrap { position: relative; }
     fillSelect($('b1'), '선수 선택'); fillSelect($('b2'), '파트너 선택');
     fillSelect($('f-by'), '선택 안 함', $('f-by').value || store.get('entered_by') || '');
     fillSelect($('log-filter'), '전체 멤버');
+    fillSelect($('post-by'), '작성자 선택', $('post-by').value || store.get('entered_by') || '');
     fillSelect($('player-select'), '선수를 고르세요', $('player-select').value || store.get('player') || '');
     const rm = $('rank-month'), keepM = rm.value;
     const months = R.listMonths(state.matches);
@@ -616,7 +669,7 @@ header .wrap { position: relative; }
       ? `<button class="btn danger" data-del-confirm="${esc(m.id)}">삭제 확인</button><button class="btn ghost" data-del-cancel>취소</button>`
       : editBtn + `<button class="btn ghost" data-del="${esc(m.id)}">삭제</button>`;
     return `<article class="board">${line(m.teamA, 'A')}${line(m.teamB, 'B')}
-      <div class="meta"><span>${showDate ? esc(m.date) + ' · ' : ''}${m.teamA.length > 1 ? '복식' : '단식'}${r.winner === 'D' ? ' · 무승부' : ''}${by}</span><span class="acts">${acts}</span></div></article>`;
+      <div class="meta"><span>${showDate ? esc(m.date) + ' · ' : ''}${m.teamA.length > 1 ? '복식' : '단식'}${r.winner === 'D' ? ' · 무승부' : ''}${by}</span><span class="acts">${commentToggle('match', m.id)}${acts}</span></div>${threadHtml('match', m.id)}</article>`;
   }
 
   function renderMembers() {
@@ -657,14 +710,77 @@ header .wrap { position: relative; }
     $('master-area').hidden = !state.masterOk;
   }
 
-  function renderAll() { renderSelects(); renderStandings(); renderPlayer(); renderLog(); renderMembers(); updatePreview(); applyWriteState(); }
+  function renderAll() {
+    // 다시 그려도 입력 중이던 칸의 포커스와 커서 위치를 지킵니다.
+    const a = document.activeElement, keepId = a && a.id, sel = a && typeof a.selectionStart === 'number' ? [a.selectionStart, a.selectionEnd] : null;
+    renderSelects(); renderStandings(); renderPlayer(); renderLog(); renderBoard(); renderMembers(); updatePreview(); applyWriteState();
+    if (keepId && document.activeElement !== a) {
+      const el = document.getElementById(keepId);
+      if (el) { try { el.focus({ preventScroll: true }); if (sel) el.setSelectionRange(sel[0], sel[1]); } catch (e) {} }
+    }
+  }
+
+  // ---------- 댓글 ----------
+  const fmtTime = (iso) => { const d = new Date(iso); if (isNaN(d)) return ''; const p = (n) => String(n).padStart(2, '0'); return `${d.getMonth() + 1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`; };
+  const commentsFor = (type, id) => state.comments.filter((c) => c.target_type === type && c.target_id === id);
+  function commentToggle(type, id) {
+    const n = commentsFor(type, id).length, open = state.openThreads.has(type + ':' + id);
+    return `<button class="btn ghost cmt-toggle" type="button" data-thread="${type}:${esc(id)}" aria-expanded="${open}">💬 댓글 ${n}</button>`;
+  }
+  function authorOptions(sel) {
+    return '<option value="">작성자</option>' + state.members.map((m) => `<option value="${esc(m.id)}"${m.id === sel ? ' selected' : ''}>${esc(m.name)}</option>`).join('');
+  }
+  function threadHtml(type, id) {
+    const key = type + ':' + id;
+    if (!state.openThreads.has(key)) return '';
+    const list = commentsFor(type, id).map((c) => {
+      const del = !state.masterOk ? '' : state.pendingCmtDel === c.id
+        ? `<button class="btn danger cmt-toggle" type="button" data-cmt-del-confirm="${esc(c.id)}">삭제 확인</button><button class="btn ghost cmt-toggle" type="button" data-cmt-del-cancel>취소</button>`
+        : `<button class="btn ghost cmt-toggle" type="button" data-cmt-del="${esc(c.id)}">삭제</button>`;
+      return `<div class="cmt"><div class="cmeta"><b>${esc(c.author_id ? memberName(c.author_id) : '알 수 없음')}</b><span>${fmtTime(c.created_at)}</span>${del}</div><div class="cbody">${esc(c.body)}</div></div>`;
+    }).join('') || '<div class="hint">아직 댓글이 없습니다. 첫 댓글을 남겨 보세요.</div>';
+    const d = state.drafts[key] || {};
+    const by = d.by !== undefined ? d.by : (store.get('entered_by') || '');
+    const sid = key.replace(/[^a-z0-9-]/gi, '_');
+    const form = canWrite()
+      ? `<div class="cmt-form">
+          <select id="cmt-by-${sid}" data-draft="${key}" data-field="by" aria-label="작성자">${authorOptions(by)}</select>
+          <textarea id="cmt-text-${sid}" data-draft="${key}" data-field="text" rows="1" maxlength="500" placeholder="댓글을 입력하세요" aria-label="댓글">${esc(d.text || '')}</textarea>
+          <button class="btn" type="button" data-cmt-send="${key}">등록</button>
+        </div>`
+      : '<div class="hint">댓글을 쓰려면 위의 클럽 PIN을 입력하세요.</div>';
+    return `<div class="thread">${list}${form}</div>`;
+  }
+
+  // ---------- 게시판 ----------
+  function renderBoard() {
+    const el = $('posts');
+    if (!state.loaded) { el.innerHTML = '<div class="panel empty">게시판을 불러오는 중…</div>'; return; }
+    const list = state.posts.slice().sort((a, b) => (b.pinned - a.pinned) || b.created_at.localeCompare(a.created_at));
+    if (!list.length) { el.innerHTML = '<div class="panel empty"><strong>아직 글이 없습니다</strong>“글쓰기”를 눌러 첫 글을 남겨 보세요.</div>'; return; }
+    el.innerHTML = list.map((p) => {
+      const id = esc(p.id);
+      const acts = !state.masterOk ? '' : state.pendingPostDel === p.id
+        ? `<button class="btn danger cmt-toggle" type="button" data-post-del-confirm="${id}">삭제 확인</button><button class="btn ghost cmt-toggle" type="button" data-post-del-cancel>취소</button>`
+        : `<button class="btn ghost cmt-toggle" type="button" data-post-pin="${id}" data-pinned="${p.pinned ? 1 : 0}">${p.pinned ? '공지 해제' : '공지 고정'}</button><button class="btn ghost cmt-toggle" type="button" data-post-del="${id}">삭제</button>`;
+      return `<article class="post${p.pinned ? ' pinned' : ''}">
+        <h3>${p.pinned ? '<span class="badge">공지</span>' : ''}${esc(p.title)}</h3>
+        <div class="pmeta"><span>${esc(p.author_id ? memberName(p.author_id) : '알 수 없음')} · ${fmtTime(p.created_at)}</span></div>
+        <div class="pbody">${esc(p.body)}</div>
+        <div class="pmeta"><span class="pacts">${commentToggle('post', p.id)}</span><span class="pacts">${acts}</span></div>
+        ${threadHtml('post', p.id)}
+      </article>`;
+    }).join('');
+  }
 
   // ---------- 데이터 ----------
   async function loadAll() {
-    const [mem, mat, set] = await Promise.all([
+    const [mem, mat, set, pst, cmt] = await Promise.all([
       state.sb.from('members').select('id,name').is('deleted_at', null).order('name'),
       state.sb.from('matches').select('id,played_on,team_a,team_b,sets,entered_by,created_at,updated_at').is('deleted_at', null),
       state.sb.from('league_settings').select('win_points,draw_points,loss_points').eq('id', 1).maybeSingle(),
+      state.sb.from('posts').select('id,author_id,title,body,pinned,created_at').is('deleted_at', null).order('created_at', { ascending: false }).limit(300),
+      state.sb.from('comments').select('id,target_type,target_id,author_id,body,created_at').is('deleted_at', null).order('created_at').limit(2000),
     ]);
     const err = mem.error || mat.error || set.error;
     if (err) { setStatus('기록을 불러오지 못했습니다. 인터넷 연결을 확인하고 새로고침하세요.', true); return; }
@@ -674,6 +790,8 @@ header .wrap { position: relative; }
       sets: (x.sets || []).map((v) => [Number(v.a), Number(v.b)]),
       enteredBy: x.entered_by, createdAt: Date.parse(x.created_at) || 0, edited: !!x.updated_at,
     })).filter((m) => m.teamA.length && m.teamB.length && m.sets.length);
+    if (!pst.error) state.posts = pst.data;
+    if (!cmt.error) state.comments = cmt.data;
     if (set.data) state.settings = { winPoints: set.data.win_points, drawPoints: set.data.draw_points ?? R.DEFAULT_SETTINGS.drawPoints, lossPoints: set.data.loss_points };
     state.loaded = true;
     if (/불러오지 못했습니다/.test($('status').textContent)) setStatus('');
@@ -684,7 +802,7 @@ header .wrap { position: relative; }
   function scheduleReload() { clearTimeout(reloadTimer); reloadTimer = setTimeout(loadAll, 300); }
 
   const errCode = (msg) => Object.keys(ERRORS).find((k) => (msg || '').includes(k));
-  const MASTER_FNS = new Set(['update_match', 'remove_match', 'rename_member', 'remove_member', 'set_points', 'change_pin', 'change_master_pin']);
+  const MASTER_FNS = new Set(['update_match', 'remove_match', 'rename_member', 'remove_member', 'set_points', 'change_pin', 'change_master_pin', 'remove_post', 'pin_post', 'remove_comment']);
   function clearMaster() { state.masterOk = false; state.masterPin = null; store.set('master_pin', null); }
   async function rpc(fn, args) {
     if (!state.sb) { setStatus('서버에 연결되지 않았습니다. 새로고침하세요.', true); return null; }
@@ -1024,8 +1142,74 @@ header .wrap { position: relative; }
   })();
 
 
+  // ---------- 게시판·댓글 이벤트 ----------
+  document.addEventListener('input', (ev) => {
+    const t = ev.target; if (!t.dataset || !t.dataset.draft) return;
+    const d = state.drafts[t.dataset.draft] || (state.drafts[t.dataset.draft] = {});
+    d[t.dataset.field] = t.value;
+    if (t.dataset.field === 'by' && t.value) store.set('entered_by', t.value);
+  });
+  document.addEventListener('change', (ev) => {
+    const t = ev.target; if (!t.dataset || t.dataset.field !== 'by') return;
+    (state.drafts[t.dataset.draft] || (state.drafts[t.dataset.draft] = {})).by = t.value;
+    if (t.value) store.set('entered_by', t.value);
+  });
+  document.addEventListener('click', async (ev) => {
+    const t = ev.target.closest('button'); if (!t) return;
+    const d = t.dataset;
+    if (d.thread) {
+      if (state.openThreads.has(d.thread)) state.openThreads.delete(d.thread); else state.openThreads.add(d.thread);
+      renderLog(); renderPlayer(); renderBoard();
+      if (state.openThreads.has(d.thread)) { const ta = document.getElementById('cmt-text-' + d.thread.replace(/[^a-z0-9-]/gi, '_')); if (ta) try { ta.focus({ preventScroll: true }); } catch (e) {} }
+      return;
+    }
+    if (d.cmtSend) {
+      const [type, id] = d.cmtSend.split(':');
+      const draft = state.drafts[d.cmtSend] || {};
+      const by = draft.by !== undefined ? draft.by : (store.get('entered_by') || '');
+      const text = (draft.text || '').trim();
+      if (!by) { setStatus(ERRORS.bad_author, true); return; }
+      if (!text) { setStatus(ERRORS.bad_comment, true); return; }
+      t.disabled = true;
+      const ok = await rpc('add_comment', { p_target_type: type, p_target_id: id, p_author: by, p_body: text });
+      t.disabled = false;
+      if (ok) { state.drafts[d.cmtSend] = { by }; renderLog(); renderPlayer(); renderBoard(); }
+      return;
+    }
+    if (d.cmtDel) { state.pendingCmtDel = d.cmtDel; renderLog(); renderPlayer(); renderBoard(); return; }
+    if (t.hasAttribute('data-cmt-del-cancel')) { state.pendingCmtDel = null; renderLog(); renderPlayer(); renderBoard(); return; }
+    if (d.cmtDelConfirm) { state.pendingCmtDel = null; await rpc('remove_comment', { p_id: d.cmtDelConfirm }); return; }
+    if (d.postPin) { await rpc('pin_post', { p_id: d.postPin, p_pinned: d.pinned !== '1' }); return; }
+    if (d.postDel) { state.pendingPostDel = d.postDel; renderBoard(); return; }
+    if (t.hasAttribute('data-post-del-cancel')) { state.pendingPostDel = null; renderBoard(); return; }
+    if (d.postDelConfirm) { state.pendingPostDel = null; if (await rpc('remove_post', { p_id: d.postDelConfirm })) setStatus('글을 삭제했습니다.'); return; }
+  });
+  $('post-new').addEventListener('click', () => {
+    if (!canWrite()) { askPin('글을 쓰려면 먼저 위의 클럽 PIN을 입력하세요.'); return; }
+    $('post-form').hidden = false; $('post-new').hidden = true;
+    try { ($('post-by').value ? $('post-title') : $('post-by')).focus(); } catch (e) {}
+  });
+  $('post-cancel').addEventListener('click', () => { $('post-form').hidden = true; $('post-new').hidden = false; });
+  $('post-by').addEventListener('change', () => { if ($('post-by').value) store.set('entered_by', $('post-by').value); });
+  $('post-form').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const by = $('post-by').value, title = $('post-title').value.trim(), body = $('post-body').value.trim();
+    if (!by) { setStatus(ERRORS.bad_author, true); return; }
+    if (!title) { setStatus(ERRORS.bad_title, true); return; }
+    if (!body) { setStatus(ERRORS.bad_body, true); return; }
+    $('post-save').disabled = true;
+    const ok = await rpc('add_post', { p_author: by, p_title: title, p_body: body });
+    $('post-save').disabled = false;
+    if (ok) {
+      $('post-title').value = ''; $('post-body').value = '';
+      $('post-form').hidden = true; $('post-new').hidden = false;
+      setStatus('글을 등록했습니다.');
+      setTimeout(() => { if ($('status').textContent === '글을 등록했습니다.') setStatus(''); }, 3000);
+    }
+  });
+
   // ---------- 새 버전 확인 ----------
-  const APP_VERSION = '2026.10.14-9';
+  const APP_VERSION = '2026.10.14-10';
   async function checkVersion() {
     try {
       const res = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
