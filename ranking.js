@@ -374,7 +374,8 @@
     const rating = opts.ratings || new Map();
     const rate = (id) => (rating.has(id) ? rating.get(id) : 1500);
     const counts = [...draw.games.values()];
-    let sc = (Math.max(...counts) - Math.min(...counts)) * 20;
+    const mean = counts.reduce((a, b) => a + b, 0) / counts.length;
+    let sc = (Math.max(...counts) - Math.min(...counts)) * 20 + counts.reduce((a, c) => a + Math.abs(c - mean), 0) * 6;
     const matches = draw.rounds.flat();
     const pairCount = new Map();
     const k = (a, b) => (a < b ? a + '|' + b : b + '|' + a);

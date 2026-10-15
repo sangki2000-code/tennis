@@ -221,3 +221,31 @@ test('규칙 충돌: 상기·문배·성훈 + 1명뿐이면 상기 규칙이 우
   const d = makeBestDraw({ players: [S, M, H, 'w'], rounds: 3, rules: rules2, mode: 'mix' }, 50);
   for (const m of d.rounds.flat()) assert.ok(paired(m, S, M));
 });
+
+const W = 'W'; // 김왕태
+const rules3 = { partnerOf: { S: [M, G] }, rivalry: { teamA: [S, G], teamB: [M, J] }, preferPairs: [[H, M], [W, G]] };
+
+test('같은 조 두 쌍(성훈·문배, 왕태·기웅): 해당 인원이 오면 각각 한 팀 경기가 있고 김상기 규칙 유지', () => {
+  const cases = [
+    [S, G, M, J, W],           // 네 명 + 왕태
+    [S, G, M, J, H, W],        // 네 명 + 성훈 + 왕태
+    [S, G, M, J, H, W, 'n'],   // 7명
+    [G, W, M, H, 'n'],         // 김상기 없음
+    [S, G, W, 'n', 'k'],       // 문배 없음: 상기는 기웅과만 짝, 왕태·기웅 조는 상기가 쉬는 경기에서
+  ];
+  for (const ps of cases) {
+    for (let t = 0; t < 8; t++) {
+      const rounds = ps.length <= 5 ? 5 : 6;
+      const ms = makeBestDraw({ players: ps, rounds, courts: 1, rules: rules3, mode: 'mix' }, 300).rounds.flat();
+      for (const [x, y] of rules3.preferPairs) if (ps.includes(x) && ps.includes(y)) assert.ok(ms.some((m) => paired(m, x, y)), `${x}${y} 없음: ${ps.join()}`);
+      for (const m of ms) {
+        const four = m.teamA.concat(m.teamB);
+        if (four.includes(S)) assert.ok(paired(m, S, M) || paired(m, S, G), `상기 규칙: ${ps.join()}`);
+      }
+      if (ps.includes(S) && ps.includes(G) && ps.includes(M) && ps.includes(J)) {
+        assert.ok(ms.some((m) => m.rivalry), '대항전');
+        assert.ok(ms.some((m) => paired(m, S, M)), '준비조');
+      }
+    }
+  }
+});

@@ -488,11 +488,11 @@ header .wrap { position: relative; }
     </section>
   </div>
 </main>
-<footer class="ver wrap">법무연수원 테니스 클럽 랭킹 · 버전 <span id="app-ver">2026.10.15-3</span> · <button type="button" class="namelink" id="master-link" style="font-size:12px;font-weight:500;color:var(--muted)">마스터</button></footer>
+<footer class="ver wrap">법무연수원 테니스 클럽 랭킹 · 버전 <span id="app-ver">2026.10.15-4</span> · <button type="button" class="namelink" id="master-link" style="font-size:12px;font-weight:500;color:var(--muted)">마스터</button></footer>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="config.js?v=2026.10.15-3"></script>
-<script src="ranking.js?v=2026.10.15-3"></script>
+<script src="config.js?v=2026.10.15-4"></script>
+<script src="ranking.js?v=2026.10.15-4"></script>
 <script>
 (function () {
   'use strict';
@@ -1192,7 +1192,7 @@ header .wrap { position: relative; }
   const DRAW_RULES = {
     exclude: ['박정기'],                                    // 대진표에서 제외 (초보)
     partnerOf: { '김상기': ['김문배', '최기웅'] },           // 김상기는 이 중 한 명과만 짝 (가장 우선하는 규칙)
-    preferPairs: [['김성훈', '김문배']],                    // 둘 다 오면 같은 조 경기를 꼭 넣음
+    preferPairs: [['김성훈', '김문배'], ['김왕태', '최기웅']], // 둘 다 오면 같은 조 경기를 꼭 넣음
     rivalry: { nameA: '법무연수원', teamA: ['김상기', '최기웅'], nameB: '수지클럽', teamB: ['김문배', '서진호'] },
   };
   const idOf = (name) => (state.members.find((m) => m.name === name) || {}).id;
@@ -1237,7 +1237,7 @@ header .wrap { position: relative; }
     let no = 0;
     const rows = d.rounds.map((round, ri) => round.map((m, ci) => {
       no++;
-      const tag = m.rivalry ? '<span class="tag riv">팀 대항전</span>' : m.practice ? '<span class="tag prac">대회 준비조</span>' : m.prefer ? '<span class="tag prac">같은 조</span>' : '';
+      const tag = (m.rivalry ? '<span class="tag riv">팀 대항전</span>' : '') + (m.practice ? '<span class="tag prac">대회 준비조</span>' : '') + (m.prefer ? '<span class="tag prac">같은 조</span>' : '');
       return `<div class="draw-row"><span class="no">${no}경기</span>
         <span class="vs"><span class="tm">${m.teamA.map(nm).map(esc).join('·')}</span> <span class="hint">vs</span> <span class="tm">${m.teamB.map(nm).map(esc).join('·')}</span>${tag}
           ${round.length > 1 ? `<small>${ri + 1}라운드 · 코트 ${ci + 1}</small>` : ''}</span>
@@ -1258,7 +1258,8 @@ header .wrap { position: relative; }
     let no = 0;
     const lines = d.rounds.flatMap((round, ri) => round.map((m, ci) => {
       no++;
-      const tag = m.rivalry ? ' (팀 대항전)' : m.practice ? ' (대회 준비조)' : m.prefer ? ' (같은 조)' : '';
+      const tags = [m.rivalry && '팀 대항전', m.practice && '대회 준비조', m.prefer && '같은 조'].filter(Boolean);
+      const tag = tags.length ? ` (${tags.join(', ')})` : '';
       return `${no}경기${round.length > 1 ? ` [코트${ci + 1}]` : ''}  ${m.teamA.map(memberName).join('·')} vs ${m.teamB.map(memberName).join('·')}${tag}`;
     }));
     const counts = Object.entries(d.games).sort((a, b) => b[1] - a[1]).map(([id, g]) => `${memberName(id)} ${g}`).join(', ');
@@ -1404,7 +1405,7 @@ header .wrap { position: relative; }
   });
 
   // ---------- 새 버전 확인 ----------
-  const APP_VERSION = '2026.10.15-3';
+  const APP_VERSION = '2026.10.15-4';
   async function checkVersion() {
     try {
       const res = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
