@@ -186,6 +186,23 @@ textarea { font: 400 15px var(--font-body); color: var(--fg); background: var(--
 .tag { display: inline-block; font: 600 11px var(--font-body); border-radius: 4px; padding: 1px 6px; margin-left: 4px; vertical-align: 1px; }
 .tag.riv { background: var(--court); color: var(--surface); }
 .tag.prac { background: var(--ball); color: var(--fg); }
+.att-sum { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 14px; }
+.att-sum b { font: 700 18px var(--font-display); }
+.att-me { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; background: var(--bg); border-radius: 8px; padding: 8px 10px; }
+.att-me select { width: auto; flex: 0 1 9em; }
+.att-btn { font: 600 14px var(--font-body); border: 1px solid var(--line); background: var(--surface); color: var(--fg); border-radius: 999px; padding: 6px 14px; cursor: pointer; }
+.att-btn[aria-pressed="true"].yes { background: var(--win); border-color: var(--win); color: var(--surface); }
+.att-btn[aria-pressed="true"].no { background: var(--loss); border-color: var(--loss); color: var(--surface); }
+.att-btn[aria-pressed="true"].maybe { background: var(--muted); border-color: var(--muted); color: var(--surface); }
+.att-group { display: grid; grid-template-columns: 4.2em minmax(0, 1fr); gap: 6px; font-size: 14px; align-items: baseline; }
+.att-group .lab { font-weight: 600; color: var(--muted); }
+.att-names { display: flex; flex-wrap: wrap; gap: 4px 8px; }
+.att-rows { display: grid; gap: 6px; }
+.att-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.att-row .n { min-width: 4.5em; font-weight: 600; }
+.att-row .att-btn { padding: 3px 10px; font-size: 13px; }
+details.more > summary { cursor: pointer; color: var(--court); font-size: 14px; }
+.dday { display: inline-block; font: 700 12px var(--font-body); color: var(--surface); background: var(--court); border-radius: 4px; padding: 1px 6px; margin-left: 6px; vertical-align: 2px; }
 .update-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; border-color: var(--court); font-weight: 600; }
 footer.ver { color: var(--muted); font-size: 12px; text-align: center; padding-block: 0 32px; }
 .inline-form { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -231,6 +248,7 @@ header .wrap { position: relative; }
       <button role="tab" id="tab-rank" aria-controls="p-rank" aria-selected="true">순위</button>
       <button role="tab" id="tab-player" aria-controls="p-player" aria-selected="false">선수 기록</button>
       <button role="tab" id="tab-add" aria-controls="p-add" aria-selected="false">결과 입력</button>
+      <button role="tab" id="tab-attend" aria-controls="p-attend" aria-selected="false">참석</button>
       <button role="tab" id="tab-draw" aria-controls="p-draw" aria-selected="false">대진표</button>
       <button role="tab" id="tab-log" aria-controls="p-log" aria-selected="false">경기 기록</button>
       <button role="tab" id="tab-board" aria-controls="p-board" aria-selected="false">게시판</button>
@@ -348,9 +366,30 @@ header .wrap { position: relative; }
       </div>
     </section>
 
+    <section role="tabpanel" id="p-attend" aria-labelledby="tab-attend" hidden>
+      <div>
+        <h2>정기전 참석 체크</h2>
+        <p class="hint">일정마다 참석·불참·미정을 눌러 주세요. 응답은 모두에게 바로 보입니다. 응답과 일정 등록은 클럽 PIN이 필요하고, 일정 삭제는 마스터만 할 수 있습니다.</p>
+      </div>
+      <button class="btn" type="button" id="ev-new">일정 등록</button>
+      <form class="panel" id="ev-form" autocomplete="off" hidden style="display:grid;gap:10px">
+        <div class="row">
+          <div class="field" style="flex:0 1 170px"><label for="ev-date">날짜</label><input type="date" id="ev-date"></div>
+          <div class="field" style="flex:0 1 120px"><label for="ev-time">시간</label><input type="text" id="ev-time" maxlength="20" placeholder="예: 07:00"></div>
+          <div class="field"><label for="ev-place">장소</label><input type="text" id="ev-place" maxlength="60" placeholder="예: 법무연수원 코트"></div>
+        </div>
+        <div class="field"><label for="ev-note">메모 (선택)</label><input type="text" id="ev-note" maxlength="300" placeholder="예: 정기전, 끝나고 식사"></div>
+        <div class="row">
+          <button class="btn" type="submit" id="ev-save">등록</button>
+          <button class="btn ghost" type="button" id="ev-cancel">취소</button>
+        </div>
+      </form>
+      <div class="posts" id="events"></div>
+    </section>
+
     <section role="tabpanel" id="p-draw" aria-labelledby="tab-draw" hidden>
       <div>
-        <h2>오늘의 대진표</h2>
+        <h2>대진표 <span id="draw-date" class="hint" style="font-size:15px"></span></h2>
         <p class="hint">오늘 나온 멤버를 체크하고 대진표를 만드세요. 실력(레이팅)이 비슷하도록, 같은 파트너가 겹치지 않도록, 경기 수가 고르도록 짭니다.</p>
       </div>
       <div class="notice rules" id="draw-rules"></div>
@@ -488,11 +527,11 @@ header .wrap { position: relative; }
     </section>
   </div>
 </main>
-<footer class="ver wrap">법무연수원 테니스 클럽 랭킹 · 버전 <span id="app-ver">2026.10.15-5</span> · <button type="button" class="namelink" id="master-link" style="font-size:12px;font-weight:500;color:var(--muted)">마스터</button></footer>
+<footer class="ver wrap">법무연수원 테니스 클럽 랭킹 · 버전 <span id="app-ver">2026.10.15-6</span> · <button type="button" class="namelink" id="master-link" style="font-size:12px;font-weight:500;color:var(--muted)">마스터</button></footer>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="config.js?v=2026.10.15-5"></script>
-<script src="ranking.js?v=2026.10.15-5"></script>
+<script src="config.js?v=2026.10.15-6"></script>
+<script src="ranking.js?v=2026.10.15-6"></script>
 <script>
 (function () {
   'use strict';
@@ -524,6 +563,10 @@ header .wrap { position: relative; }
     bad_body: '내용은 1~2000자로 입력하세요.',
     bad_comment: '댓글은 1~500자로 입력하세요.',
     target_not_found: '글이나 경기가 이미 삭제되었습니다. 새로고침하세요.',
+    bad_event_date: '일정 날짜를 확인하세요. (어제부터 1년 안)',
+    bad_event_text: '시간·장소·메모가 너무 깁니다.',
+    event_not_found: '이 일정은 삭제되었습니다. 새로고침하세요.',
+    bad_status: '참석·불참·미정 중에서 골라 주세요.',
     bad_points: '승점은 승리 ≥ 무승부 ≥ 패배 순서로, 0~10점 사이로 정하세요.',
     bad_new_pin: '새 PIN은 숫자 4~8자리로 입력하세요.',
     bad_master: '마스터 PIN이 올바르지 않습니다. 수정·삭제는 마스터만 할 수 있습니다.',
@@ -532,12 +575,12 @@ header .wrap { position: relative; }
 
   const state = {
     sb: null, pin: store.get('club_pin'), pinOk: false, masterPin: store.get('master_pin'), masterOk: false,
-    posts: [], comments: [], openThreads: new Set(), drafts: {}, pendingPostDel: null, pendingCmtDel: null,
+    posts: [], comments: [], events: [], attendance: [], openAtt: new Set(), openThreads: new Set(), drafts: {}, pendingPostDel: null, pendingCmtDel: null,
     loaded: false, members: [], matches: [], settings: Object.assign({}, R.DEFAULT_SETTINGS), pendingDelete: null, editingId: null, pendingEdit: null, memberEdit: null, memberEditName: '', memberDel: null,
   };
 
   // ---------- 탭 ----------
-  const tabs = ['rank', 'player', 'add', 'draw', 'log', 'board', 'mem'];
+  const tabs = ['rank', 'player', 'add', 'attend', 'draw', 'log', 'board', 'mem'];
   function showTab(key) {
     tabs.forEach((k) => {
       $('tab-' + k).setAttribute('aria-selected', String(k === key));
@@ -758,7 +801,7 @@ header .wrap { position: relative; }
   function renderAll() {
     // 다시 그려도 입력 중이던 칸의 포커스와 커서 위치를 지킵니다.
     const a = document.activeElement, keepId = a && a.id, sel = a && typeof a.selectionStart === 'number' ? [a.selectionStart, a.selectionEnd] : null;
-    renderSelects(); renderStandings(); renderPlayer(); renderLog(); renderBoard(); renderDraw(); renderMembers(); updatePreview(); applyWriteState();
+    renderSelects(); renderStandings(); renderPlayer(); renderLog(); renderBoard(); renderAttend(); renderDraw(); renderMembers(); updatePreview(); applyWriteState();
     if (keepId && document.activeElement !== a) {
       const el = document.getElementById(keepId);
       if (el) { try { el.focus({ preventScroll: true }); if (sel) el.setSelectionRange(sel[0], sel[1]); } catch (e) {} }
@@ -820,12 +863,14 @@ header .wrap { position: relative; }
 
   // ---------- 데이터 ----------
   async function loadAll() {
-    const [mem, mat, set, pst, cmt] = await Promise.all([
+    const [mem, mat, set, pst, cmt, evt, att] = await Promise.all([
       state.sb.from('members').select('id,name').is('deleted_at', null).order('name'),
       state.sb.from('matches').select('id,played_on,team_a,team_b,sets,entered_by,created_at,updated_at').is('deleted_at', null),
       state.sb.from('league_settings').select('win_points,draw_points,loss_points').eq('id', 1).maybeSingle(),
       state.sb.from('posts').select('id,author_id,title,body,pinned,created_at').is('deleted_at', null).order('created_at', { ascending: false }).limit(300),
       state.sb.from('comments').select('id,target_type,target_id,author_id,body,created_at').is('deleted_at', null).order('created_at').limit(2000),
+      state.sb.from('events').select('id,starts_on,start_time,place,note,created_by,created_at').is('deleted_at', null).order('starts_on', { ascending: false }).limit(60),
+      state.sb.from('attendance').select('event_id,member_id,status,updated_at').limit(3000),
     ]);
     const err = mem.error || mat.error || set.error;
     if (err) { setStatus('기록을 불러오지 못했습니다. 인터넷 연결을 확인하고 새로고침하세요.', true); return; }
@@ -837,6 +882,8 @@ header .wrap { position: relative; }
     })).filter((m) => m.teamA.length && m.teamB.length && m.sets.length);
     if (!pst.error) state.posts = pst.data;
     if (!cmt.error) state.comments = cmt.data;
+    if (!evt.error) state.events = evt.data;
+    if (!att.error) state.attendance = att.data;
     if (set.data) state.settings = { winPoints: set.data.win_points, drawPoints: set.data.draw_points ?? R.DEFAULT_SETTINGS.drawPoints, lossPoints: set.data.loss_points };
     state.loaded = true;
     if (/불러오지 못했습니다/.test($('status').textContent)) setStatus('');
@@ -847,7 +894,7 @@ header .wrap { position: relative; }
   function scheduleReload() { clearTimeout(reloadTimer); reloadTimer = setTimeout(loadAll, 300); }
 
   const errCode = (msg) => Object.keys(ERRORS).find((k) => (msg || '').includes(k));
-  const MASTER_FNS = new Set(['update_match', 'remove_match', 'rename_member', 'remove_member', 'set_points', 'change_pin', 'change_master_pin', 'remove_post', 'pin_post', 'remove_comment']);
+  const MASTER_FNS = new Set(['update_match', 'remove_match', 'rename_member', 'remove_member', 'set_points', 'change_pin', 'change_master_pin', 'remove_post', 'pin_post', 'remove_comment', 'remove_event']);
   function clearMaster() { state.masterOk = false; state.masterPin = null; store.set('master_pin', null); }
   async function rpc(fn, args) {
     if (!state.sb) { setStatus('서버에 연결되지 않았습니다. 새로고침하세요.', true); return null; }
@@ -1198,9 +1245,11 @@ header .wrap { position: relative; }
   };
   const idOf = (name) => (state.members.find((m) => m.name === name) || {}).id;
   const drawStore = (() => { try { return JSON.parse(store.get('draw') || 'null'); } catch (e) { return null; } })();
-  state.draw = drawStore && drawStore.date === today() ? drawStore : null;
-  state.attend = new Set((() => { try { const a = JSON.parse(store.get('attend') || 'null'); return a && a.date === today() ? a.ids : []; } catch (e) { return []; } })());
-  const saveAttend = () => store.set('attend', JSON.stringify({ date: today(), ids: [...state.attend] }));
+  state.draw = drawStore && drawStore.date >= today() ? drawStore : null;
+  const attendStore = (() => { try { const a = JSON.parse(store.get('attend') || 'null'); return a && a.date >= today() ? a : null; } catch (e) { return null; } })();
+  state.attend = new Set(attendStore ? attendStore.ids : []);
+  state.drawDate = attendStore ? attendStore.date : today();
+  const saveAttend = () => store.set('attend', JSON.stringify({ date: state.drawDate, ids: [...state.attend] }));
   const excludedIds = () => new Set(DRAW_RULES.exclude.map(idOf).filter(Boolean));
   const rivalryIds = () => {
     const r = DRAW_RULES.rivalry, a = r.teamA.map(idOf), b = r.teamB.map(idOf);
@@ -1217,6 +1266,7 @@ header .wrap { position: relative; }
   function renderDraw() {
     if (!$('draw-people')) return;
     $('draw-rules').innerHTML = drawRulesHtml();
+    $('draw-date').textContent = '· ' + fmtDay(state.drawDate || today()) + (state.drawDate && state.drawDate !== today() ? '' : ' (오늘)');
     const ex = excludedIds();
     $('draw-people').innerHTML = state.members.map((m) => {
       const off = ex.has(m.id);
@@ -1247,7 +1297,7 @@ header .wrap { position: relative; }
     }).join('')).join('');
     const counts = Object.entries(d.games).sort((a, b) => b[1] - a[1]).map(([id, g]) => `${esc(nm(id))} ${g}`).join(' · ');
     el.innerHTML = `<div style="display:grid;gap:10px">
-      <h3 class="sec">${esc(d.date)} 대진표</h3>
+      <h3 class="sec">${esc(fmtDay(d.date))} 대진표</h3>
       <div class="draw-list">${rows}</div>
       <p class="hint">경기 수 · ${counts}</p>
       <div class="row"><button class="btn" type="button" id="draw-redo">다시 짜기</button><button class="btn ghost" type="button" id="draw-copy">카톡용 글 복사</button><button class="btn ghost" type="button" id="draw-post">게시판에 올리기</button></div>
@@ -1296,7 +1346,7 @@ header .wrap { position: relative; }
         practice: !m.rivalry && prepPairs.some(([p, q]) => [a, b].some((t) => t.includes(p) && t.includes(q))),
         prefer: preferPairs.some(([p, q]) => [a, b].some((t) => t.includes(p) && t.includes(q))) };
     }));
-    state.draw = { date: today(), rounds: rounds2, games: Object.fromEntries(res.games) };
+    state.draw = { date: state.drawDate || today(), rounds: rounds2, games: Object.fromEntries(res.games) };
     store.set('draw', JSON.stringify(state.draw));
     setStatus('');
     renderDrawOut();
@@ -1340,6 +1390,128 @@ header .wrap { position: relative; }
       if (!canWrite()) askPin('결과를 저장하려면 먼저 위의 클럽 PIN을 입력하세요.');
     }
   });
+
+  // ---------- 참석 체크 ----------
+  const WD = '일월화수목금토';
+  function fmtDay(d) { const dt = new Date(d + 'T00:00:00'); return isNaN(dt) ? d : `${dt.getMonth() + 1}/${dt.getDate()}(${WD[dt.getDay()]})`; }
+  function nextSaturday() { const d = new Date(today() + 'T00:00:00'); d.setDate(d.getDate() + ((6 - d.getDay() + 7) % 7 || 7)); const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; }
+  const ATT_LABEL = { yes: '참석', no: '불참', maybe: '미정' };
+  function attOf(evId) {
+    const map = new Map(state.attendance.filter((a) => a.event_id === evId).map((a) => [a.member_id, a.status]));
+    const groups = { yes: [], no: [], maybe: [], none: [] };
+    state.members.forEach((m) => groups[map.get(m.id) || 'none'].push(m));
+    return { map, groups };
+  }
+  function eventTitle(e) { return `${fmtDay(e.starts_on)}${e.start_time ? ' ' + e.start_time : ''}${e.place ? ' · ' + e.place : ''}`; }
+  function eventCard(e, past) {
+    const { map, groups } = attOf(e.id);
+    const id = esc(e.id);
+    const me = store.get('entered_by') || '';
+    const myStatus = map.get(me);
+    const days = Math.round((new Date(e.starts_on + 'T00:00:00') - new Date(today() + 'T00:00:00')) / 86400000);
+    const dday = past ? '' : `<span class="dday">${days === 0 ? '오늘' : 'D-' + days}</span>`;
+    const names = (arr) => arr.length ? arr.map((m) => `<span>${esc(m.name)}</span>`).join('') : '<span class="hint">–</span>';
+    const btns = (mid, cur, small) => ['yes', 'no', 'maybe'].map((st) =>
+      `<button type="button" class="att-btn ${st}" aria-pressed="${cur === st}" data-att="${id}|${esc(mid)}|${st}">${ATT_LABEL[st]}</button>`).join('');
+    const open = state.openAtt.has(e.id);
+    const del = !state.masterOk ? '' : state.pendingEvDel === e.id
+      ? `<button class="btn danger cmt-toggle" type="button" data-ev-del-confirm="${id}">삭제 확인</button><button class="btn ghost cmt-toggle" type="button" data-ev-del-cancel>취소</button>`
+      : `<button class="btn ghost cmt-toggle" type="button" data-ev-del="${id}">일정 삭제</button>`;
+    return `<article class="post">
+      <h3>${esc(eventTitle(e))}${dday}</h3>
+      ${e.note ? `<div class="pbody">${esc(e.note)}</div>` : ''}
+      <div class="att-sum"><span>참석 <b style="color:var(--win)">${groups.yes.length}</b></span><span>불참 <b style="color:var(--loss)">${groups.no.length}</b></span><span>미정 <b>${groups.maybe.length}</b></span><span class="hint">미응답 ${groups.none.length}</span></div>
+      ${past ? '' : `<div class="att-me"><span>나는</span>
+        <select data-att-me="${id}" aria-label="내 이름"><option value="">이름 선택</option>${state.members.map((m) => `<option value="${esc(m.id)}"${m.id === me ? ' selected' : ''}>${esc(m.name)}</option>`).join('')}</select>
+        ${me ? btns(me, myStatus) : '<span class="hint">이름을 고르면 버튼이 나옵니다</span>'}</div>`}
+      <div class="att-group"><span class="lab">참석</span><span class="att-names">${names(groups.yes)}</span></div>
+      <div class="att-group"><span class="lab">불참</span><span class="att-names">${names(groups.no)}</span></div>
+      <div class="att-group"><span class="lab">미정</span><span class="att-names">${names(groups.maybe)}</span></div>
+      <div class="att-group"><span class="lab">미응답</span><span class="att-names">${names(groups.none)}</span></div>
+      ${past ? '' : `<details class="more" data-att-open="${id}"${open ? ' open' : ''}><summary>다른 멤버 대신 표시하기</summary>
+        <div class="att-rows" style="margin-top:8px">${state.members.map((m) => `<div class="att-row"><span class="n">${esc(m.name)}</span>${btns(m.id, map.get(m.id), true)}</div>`).join('')}</div></details>`}
+      <div class="pmeta"><span class="pacts">${past ? '' : `<button class="btn cmt-toggle" type="button" data-ev-draw="${id}">이 참석자로 대진표</button><button class="btn ghost cmt-toggle" type="button" data-ev-copy="${id}">카톡용 안내 복사</button>`}</span><span class="pacts">${del}</span></div>
+    </article>`;
+  }
+  function renderAttend() {
+    const el = $('events'); if (!el) return;
+    if (!state.loaded) { el.innerHTML = '<div class="panel empty">일정을 불러오는 중…</div>'; return; }
+    const t = today();
+    const upcoming = state.events.filter((e) => e.starts_on >= t).sort((a, b) => a.starts_on.localeCompare(b.starts_on) || (a.start_time || '').localeCompare(b.start_time || ''));
+    const past = state.events.filter((e) => e.starts_on < t).slice(0, 5);
+    el.innerHTML = (upcoming.length ? upcoming.map((e) => eventCard(e, false)).join('')
+      : '<div class="panel empty"><strong>다가오는 일정이 없습니다</strong>“일정 등록”을 눌러 다음 정기전을 올려 주세요.</div>')
+      + (past.length ? `<details class="more"><summary>지난 일정 ${past.length}개</summary><div class="posts" style="margin-top:10px">${past.map((e) => eventCard(e, true)).join('')}</div></details>` : '');
+  }
+  function attendText(e) {
+    const { groups } = attOf(e.id);
+    const list = (arr) => arr.map((m) => m.name).join(', ') || '없음';
+    return `🎾 ${eventTitle(e)}${e.note ? '\n' + e.note : ''}\n참석 체크 부탁드립니다 👉 ${location.origin + location.pathname}#attend\n\n참석(${groups.yes.length}): ${list(groups.yes)}\n불참(${groups.no.length}): ${list(groups.no)}\n미정(${groups.maybe.length}): ${list(groups.maybe)}\n미응답(${groups.none.length}): ${list(groups.none)}`;
+  }
+  $('events').addEventListener('change', (ev) => {
+    const t = ev.target;
+    if (t.dataset.attMe !== undefined) { store.set('entered_by', t.value || null); renderAttend(); }
+  });
+  $('events').addEventListener('toggle', (ev) => {
+    const d = ev.target; if (!d.dataset || !d.dataset.attOpen) return;
+    if (d.open) state.openAtt.add(d.dataset.attOpen); else state.openAtt.delete(d.dataset.attOpen);
+  }, true);
+  $('events').addEventListener('click', async (ev) => {
+    const t = ev.target.closest('button'); if (!t) return;
+    const d = t.dataset;
+    if (d.att) {
+      if (!canWrite()) { askPin('참석 응답을 하려면 먼저 위의 클럽 PIN을 입력하세요.'); return; }
+      const [eid, mid, st] = d.att.split('|');
+      // 화면에 먼저 반영하고, 서버 저장이 실패하면 다시 불러옴
+      const prev = state.attendance.find((a) => a.event_id === eid && a.member_id === mid);
+      if (prev) prev.status = st; else state.attendance.push({ event_id: eid, member_id: mid, status: st });
+      renderAttend();
+      if (!(await rpc('set_attendance', { p_event: eid, p_member: mid, p_status: st }))) scheduleReload();
+      return;
+    }
+    if (d.evDraw) {
+      const e = state.events.find((x) => x.id === d.evDraw); if (!e) return;
+      const { groups } = attOf(e.id);
+      state.attend = new Set(groups.yes.map((m) => m.id));
+      state.drawDate = e.starts_on; saveAttend();
+      if (state.draw && state.draw.date !== e.starts_on) { state.draw = null; store.set('draw', null); }
+      $('draw-rounds').value = '';
+      showTab('draw'); renderDraw(); window.scrollTo(0, 0);
+      const exN = groups.yes.filter((m) => excludedIds().has(m.id)).length;
+      setStatus(`${fmtDay(e.starts_on)} 참석자 ${groups.yes.length}명을 체크했습니다${exN ? ` (대진표 제외 ${exN}명 빼고 ${groups.yes.length - exN}명)` : ''}. “대진표 만들기”를 누르세요.`);
+      return;
+    }
+    if (d.evCopy) {
+      const e = state.events.find((x) => x.id === d.evCopy); if (!e) return;
+      try { await navigator.clipboard.writeText(attendText(e)); t.textContent = '복사됨 ✓'; setTimeout(() => { t.textContent = '카톡용 안내 복사'; }, 2000); }
+      catch (err) { setStatus('복사하지 못했습니다. 화면을 캡처해서 공유해 주세요.', true); }
+      return;
+    }
+    if (d.evDel) { state.pendingEvDel = d.evDel; renderAttend(); return; }
+    if (t.hasAttribute('data-ev-del-cancel')) { state.pendingEvDel = null; renderAttend(); return; }
+    if (d.evDelConfirm) { state.pendingEvDel = null; if (await rpc('remove_event', { p_id: d.evDelConfirm })) setStatus('일정을 삭제했습니다.'); return; }
+  });
+  $('ev-new').addEventListener('click', () => {
+    if (!canWrite()) { askPin('일정을 등록하려면 먼저 위의 클럽 PIN을 입력하세요.'); return; }
+    if (!$('ev-date').value) $('ev-date').value = nextSaturday();
+    $('ev-form').hidden = false; $('ev-new').hidden = true;
+  });
+  $('ev-cancel').addEventListener('click', () => { $('ev-form').hidden = true; $('ev-new').hidden = false; });
+  $('ev-form').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    if (!$('ev-date').value) { setStatus(ERRORS.bad_event_date, true); return; }
+    $('ev-save').disabled = true;
+    const ok = await rpc('add_event', { p_date: $('ev-date').value, p_time: $('ev-time').value.trim(), p_place: $('ev-place').value.trim(), p_note: $('ev-note').value.trim(), p_by: store.get('entered_by') || null });
+    $('ev-save').disabled = false;
+    if (ok) {
+      try { store.set('ev_last', JSON.stringify({ time: $('ev-time').value.trim(), place: $('ev-place').value.trim() })); } catch (e) {}
+      $('ev-note').value = ''; $('ev-date').value = '';
+      $('ev-form').hidden = true; $('ev-new').hidden = false;
+      setStatus('일정을 등록했습니다. “카톡용 안내 복사”로 단톡방에 알려 주세요.');
+    }
+  });
+  // 지난번 시간·장소를 기본값으로
+  try { const l = JSON.parse(store.get('ev_last') || 'null'); if (l) { $('ev-time').value = l.time || ''; $('ev-place').value = l.place || ''; } } catch (e) {}
 
   // ---------- 게시판·댓글 이벤트 ----------
   document.addEventListener('input', (ev) => {
@@ -1408,7 +1580,7 @@ header .wrap { position: relative; }
   });
 
   // ---------- 새 버전 확인 ----------
-  const APP_VERSION = '2026.10.15-5';
+  const APP_VERSION = '2026.10.15-6';
   async function checkVersion() {
     try {
       const res = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });

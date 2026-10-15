@@ -184,3 +184,10 @@ end ';
 -- club_add_post(p_pin, p_author, p_title, p_body)            : 클럽 PIN 또는 마스터
 -- club_add_comment(p_pin, p_target_type, p_target_id, p_author, p_body) : 클럽 PIN 또는 마스터, 대상 존재 확인
 -- club_remove_post / club_pin_post / club_remove_comment      : 마스터 전용
+
+-- 참석 체크 (2026-10-15 추가)
+-- public.events(id, starts_on, start_time, place, note, created_by, created_at, deleted_at)
+-- public.attendance(event_id, member_id, status 'yes'|'no'|'maybe', updated_at)  기본키 (event_id, member_id)
+-- club_add_event(p_pin, p_date, p_time, p_place, p_note, p_by)   : 클럽 PIN 또는 마스터
+-- club_set_attendance(p_pin, p_event, p_member, p_status)        : 클럽 PIN 또는 마스터 (있으면 바꾸고 없으면 추가)
+-- club_remove_event(p_pin, p_id)                                 : 마스터 전용 (숨김 처리)
