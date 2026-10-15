@@ -203,3 +203,8 @@ end ';
 -- club_get_draw_rules(p_pin)                         : 마스터 전용
 -- club_set_draw_rules(p_pin, p_rules)                : 마스터 전용
 -- club_save_draw(p_pin, p_date, p_rounds, p_games, p_by) : 마스터 전용 (날짜별 덮어쓰기)
+
+-- 대진표 삭제 (2026-10-15 추가)
+-- public.draws.deleted_at timestamptz : 소프트 삭제. 앱은 deleted_at is null 만 읽음.
+-- club_save_draw 는 같은 날짜로 다시 저장하면 deleted_at 을 비움(되살림).
+-- club_remove_draw(p_pin, p_date) : 마스터 전용. 없으면 {error:'draw_not_found'}

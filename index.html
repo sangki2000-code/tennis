@@ -587,11 +587,11 @@ header .wrap { position: relative; }
     </section>
   </div>
 </main>
-<footer class="ver wrap">법무연수원 테니스 클럽 랭킹 · 버전 <span id="app-ver">2026.10.15-14</span> · <button type="button" class="namelink" id="master-link" style="font-size:12px;font-weight:500;color:var(--muted)">마스터</button></footer>
+<footer class="ver wrap">법무연수원 테니스 클럽 랭킹 · 버전 <span id="app-ver">2026.10.15-15</span> · <button type="button" class="namelink" id="master-link" style="font-size:12px;font-weight:500;color:var(--muted)">마스터</button></footer>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="config.js?v=2026.10.15-14"></script>
-<script src="ranking.js?v=2026.10.15-14"></script>
+<script src="config.js?v=2026.10.15-15"></script>
+<script src="ranking.js?v=2026.10.15-15"></script>
 <script>
 (function () {
   'use strict';
@@ -629,6 +629,7 @@ header .wrap { position: relative; }
     bad_status: '참석·불참·미정 중에서 골라 주세요.',
     bad_points: '승점은 승리 ≥ 무승부 ≥ 패배 순서로, 0~10점 사이로 정하세요.',
     bad_new_pin: '새 PIN은 숫자 4~8자리로 입력하세요.',
+    draw_not_found: '이미 삭제된 대진표입니다. 새로고침하세요.',
     bad_master: '마스터 PIN이 올바르지 않습니다. 수정·삭제는 마스터만 할 수 있습니다.',
     bad_new_master: '새 마스터 PIN은 숫자 6~12자리로 입력하세요.',
   };
@@ -958,7 +959,7 @@ header .wrap { position: relative; }
       state.sb.from('comments').select('id,target_type,target_id,author_id,body,created_at').is('deleted_at', null).order('created_at').limit(2000),
       state.sb.from('events').select('id,starts_on,start_time,place,note,created_by,created_at').is('deleted_at', null).order('starts_on', { ascending: false }).limit(60),
       state.sb.from('attendance').select('event_id,member_id,status,updated_at').limit(3000),
-      state.sb.from('draws').select('play_date,rounds,games,updated_at').gte('play_date', yday).order('play_date').limit(30),
+      state.sb.from('draws').select('play_date,rounds,games,updated_at').is('deleted_at', null).gte('play_date', yday).order('play_date').limit(30),
     ]);
     const err = mem.error || mat.error || set.error;
     if (err) { setStatus('기록을 불러오지 못했습니다. 인터넷 연결을 확인하고 새로고침하세요.', true); return; }
@@ -983,7 +984,7 @@ header .wrap { position: relative; }
   function scheduleReload() { clearTimeout(reloadTimer); reloadTimer = setTimeout(loadAll, 300); }
 
   const errCode = (msg) => Object.keys(ERRORS).find((k) => (msg || '').includes(k));
-  const MASTER_FNS = new Set(['update_match', 'remove_match', 'rename_member', 'remove_member', 'set_points', 'change_pin', 'change_master_pin', 'remove_post', 'pin_post', 'remove_comment', 'remove_event', 'set_weekend', 'save_draw', 'set_draw_rules']);
+  const MASTER_FNS = new Set(['update_match', 'remove_match', 'rename_member', 'remove_member', 'set_points', 'change_pin', 'change_master_pin', 'remove_post', 'pin_post', 'remove_comment', 'remove_event', 'set_weekend', 'save_draw', 'remove_draw', 'set_draw_rules']);
   function clearMaster() { state.masterOk = false; state.masterPin = null; store.set('master_pin', null); }
   async function rpc(fn, args) {
     if (!state.sb) { setStatus('서버에 연결되지 않았습니다. 새로고침하세요.', true); return null; }
@@ -1411,7 +1412,7 @@ header .wrap { position: relative; }
       <h3 class="sec">${esc(fmtDay(d.date))} 대진표</h3>
       <div class="draw-list">${rows}</div>
       <p class="hint">경기 수 · ${counts}</p>
-      <div class="row">${state.masterOk ? '<button class="btn" type="button" id="draw-redo">다시 짜기</button>' : ''}<button class="btn ghost" type="button" id="draw-copy">카톡용 글 복사</button><button class="btn ghost" type="button" id="draw-post">게시판에 올리기</button></div>
+      <div class="row">${state.masterOk ? '<button class="btn" type="button" id="draw-redo">다시 짜기</button>' : ''}<button class="btn ghost" type="button" id="draw-copy">카톡용 글 복사</button><button class="btn ghost" type="button" id="draw-post">게시판에 올리기</button>${state.masterOk ? `<button class="btn danger" type="button" id="draw-del">${drawDelArmed === d.date ? '정말 삭제할까요? 한 번 더 누르세요' : '대진표 삭제'}</button>` : ''}</div>
     </div>`;
   }
   function drawText() {
@@ -1469,6 +1470,24 @@ header .wrap { position: relative; }
     if (ok) setStatus('대진표를 저장했습니다. 모든 멤버 화면에 바로 보입니다.');
     if (res.rounds.length < rounds) setStatus(`규칙 때문에 ${res.rounds.length}경기까지만 만들었습니다.`, true);
   }
+  // 대진표 삭제 (마스터 전용, 두 번 눌러 확인)
+  let drawDelArmed = null, drawDelTimer = null;
+  async function removeDraw() {
+    if (!state.masterOk) { setStatus(ERRORS.bad_master, true); return; }
+    const d = currentDraw(); if (!d) return;
+    clearTimeout(drawDelTimer);
+    if (drawDelArmed !== d.date) {
+      drawDelArmed = d.date; renderDrawOut();
+      drawDelTimer = setTimeout(() => { drawDelArmed = null; renderDrawOut(); }, 4000);
+      return;
+    }
+    drawDelArmed = null;
+    if (await rpc('remove_draw', { p_date: d.date })) {
+      state.draws = state.draws.filter((x) => x.play_date !== d.date);
+      renderDrawOut();
+      setStatus(`${fmtDay(d.date)} 대진표를 삭제했습니다.`);
+    } else renderDrawOut();
+  }
   $('draw-people').addEventListener('change', (ev) => {
     const t = ev.target; if (!t.dataset.attend) return;
     if (t.checked) state.attend.add(t.dataset.attend); else state.attend.delete(t.dataset.attend);
@@ -1481,6 +1500,7 @@ header .wrap { position: relative; }
   $('draw-out').addEventListener('click', async (ev) => {
     const t = ev.target.closest('button'); if (!t) return;
     if (t.id === 'draw-redo') { makeDraw(); return; }
+    if (t.id === 'draw-del') { removeDraw(); return; }
     if (t.id === 'draw-copy') {
       try { await navigator.clipboard.writeText(drawText()); t.textContent = '복사됨 ✓'; setTimeout(() => { t.textContent = '카톡용 글 복사'; }, 2000); }
       catch (e) { setStatus('복사하지 못했습니다. 게시판에 올리기를 이용해 주세요.', true); }
@@ -1934,7 +1954,7 @@ header .wrap { position: relative; }
   });
 
   // ---------- 새 버전 확인 ----------
-  const APP_VERSION = '2026.10.15-14';
+  const APP_VERSION = '2026.10.15-15';
   async function checkVersion() {
     try {
       const res = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
