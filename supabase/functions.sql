@@ -191,3 +191,8 @@ end ';
 -- club_add_event(p_pin, p_date, p_time, p_place, p_note, p_by)   : 클럽 PIN 또는 마스터
 -- club_set_attendance(p_pin, p_event, p_member, p_status)        : 클럽 PIN 또는 마스터 (있으면 바꾸고 없으면 추가)
 -- club_remove_event(p_pin, p_id)                                 : 마스터 전용 (숨김 처리)
+
+-- 주말 운동 멤버 (2026-10-15 추가)
+-- public.members.weekend boolean default true. 박정기만 false.
+-- 주말 운동 멤버가 아니면 참석 체크·대진표 목록에서 빠짐(순위·기록은 그대로). 일정별로 '게스트'로 추가 가능.
+-- club_set_weekend(p_pin, p_id, p_on) : 마스터 전용

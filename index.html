@@ -486,7 +486,7 @@ header .wrap { position: relative; }
 
       <div>
         <h2>멤버</h2>
-        <p class="hint">멤버 추가는 클럽 PIN으로 할 수 있습니다. 이름 수정·삭제는 마스터만 가능하며, 경기 기록이 있는 멤버는 삭제할 수 없습니다.</p>
+        <p class="hint">멤버 추가는 클럽 PIN으로 할 수 있습니다. 이름 수정·삭제와 <b>주말 운동</b> 표시는 마스터만 바꿀 수 있습니다. 주말 운동 멤버가 아니면 참석 체크·대진표 목록에서 빠지고, 순위와 기록에는 그대로 남습니다.</p>
       </div>
       <form class="inline-form" id="member-form">
         <input type="text" id="m-name" placeholder="이름" maxlength="20" aria-label="새 멤버 이름" required>
@@ -542,11 +542,11 @@ header .wrap { position: relative; }
     </section>
   </div>
 </main>
-<footer class="ver wrap">법무연수원 테니스 클럽 랭킹 · 버전 <span id="app-ver">2026.10.15-8</span> · <button type="button" class="namelink" id="master-link" style="font-size:12px;font-weight:500;color:var(--muted)">마스터</button></footer>
+<footer class="ver wrap">법무연수원 테니스 클럽 랭킹 · 버전 <span id="app-ver">2026.10.15-9</span> · <button type="button" class="namelink" id="master-link" style="font-size:12px;font-weight:500;color:var(--muted)">마스터</button></footer>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="config.js?v=2026.10.15-8"></script>
-<script src="ranking.js?v=2026.10.15-8"></script>
+<script src="config.js?v=2026.10.15-9"></script>
+<script src="ranking.js?v=2026.10.15-9"></script>
 <script>
 (function () {
   'use strict';
@@ -808,7 +808,11 @@ header .wrap { position: relative; }
         const acts = !state.masterOk ? '' : state.memberDel === m.id
           ? `<button class="btn danger" type="button" data-mem-del-confirm="${id}">삭제 확인</button><button class="btn ghost" type="button" data-mem-cancel>취소</button>`
           : `<button class="btn ghost" type="button" data-mem-edit="${id}">이름 수정</button><button class="btn ghost" type="button" data-mem-del="${id}">삭제</button>`;
-        return `<li><span class="mname">${esc(m.name)}</span><span class="mcount">${counts.get(m.id) || 0}경기</span><span class="macts">${acts}</span></li>`;
+        const wk = m.weekend !== false;
+        const wkCtl = state.masterOk
+          ? `<button class="btn ghost cmt-toggle" type="button" data-mem-weekend="${id}" data-on="${wk ? 1 : 0}" aria-pressed="${wk}">${wk ? '주말 운동 ✓' : '주말 운동 ✗'}</button>`
+          : (wk ? '' : '<span class="hint">주말 운동 아님</span>');
+        return `<li><span class="mname">${esc(m.name)}</span><span class="mcount">${counts.get(m.id) || 0}경기</span>${wkCtl}<span class="macts">${acts}</span></li>`;
       }).join('');
       const inp = $('member-edit-input');
       if (inp) { inp.addEventListener('input', () => { state.memberEditName = inp.value; }); if (state.memberEditFocus) { inp.focus(); inp.select(); state.memberEditFocus = false; } }
@@ -897,7 +901,7 @@ header .wrap { position: relative; }
   // ---------- 데이터 ----------
   async function loadAll() {
     const [mem, mat, set, pst, cmt, evt, att] = await Promise.all([
-      state.sb.from('members').select('id,name').is('deleted_at', null).order('name'),
+      state.sb.from('members').select('id,name,weekend').is('deleted_at', null).order('name'),
       state.sb.from('matches').select('id,played_on,team_a,team_b,sets,entered_by,created_at,updated_at').is('deleted_at', null),
       state.sb.from('league_settings').select('win_points,draw_points,loss_points').eq('id', 1).maybeSingle(),
       state.sb.from('posts').select('id,author_id,title,body,pinned,created_at').is('deleted_at', null).order('created_at', { ascending: false }).limit(300),
@@ -927,7 +931,7 @@ header .wrap { position: relative; }
   function scheduleReload() { clearTimeout(reloadTimer); reloadTimer = setTimeout(loadAll, 300); }
 
   const errCode = (msg) => Object.keys(ERRORS).find((k) => (msg || '').includes(k));
-  const MASTER_FNS = new Set(['update_match', 'remove_match', 'rename_member', 'remove_member', 'set_points', 'change_pin', 'change_master_pin', 'remove_post', 'pin_post', 'remove_comment', 'remove_event']);
+  const MASTER_FNS = new Set(['update_match', 'remove_match', 'rename_member', 'remove_member', 'set_points', 'change_pin', 'change_master_pin', 'remove_post', 'pin_post', 'remove_comment', 'remove_event', 'set_weekend']);
   function clearMaster() { state.masterOk = false; state.masterPin = null; store.set('master_pin', null); }
   async function rpc(fn, args) {
     if (!state.sb) { setStatus('서버에 연결되지 않았습니다. 새로고침하세요.', true); return null; }
@@ -1158,6 +1162,12 @@ header .wrap { position: relative; }
       renderMembers(); return;
     }
     if (t.hasAttribute('data-mem-cancel')) { state.memberEdit = null; state.memberDel = null; renderMembers(); return; }
+    if (d.memWeekend) {
+      if (!state.masterOk) { setStatus(ERRORS.bad_master, true); return; }
+      const on = d.on !== '1';
+      if (await rpc('set_weekend', { p_id: d.memWeekend, p_on: on })) setStatus(`${memberName(d.memWeekend)}: 주말 운동 멤버 ${on ? '포함' : '제외'}로 바꿨습니다.`);
+      return;
+    }
     if (d.memSave) {
       const name = (state.memberEditName || '').trim();
       if (!name) { setStatus(ERRORS.bad_name, true); return; }
@@ -1303,7 +1313,7 @@ header .wrap { position: relative; }
     $('draw-rules').innerHTML = drawRulesHtml();
     $('draw-date').textContent = '· ' + fmtDay(state.drawDate || today()) + (state.drawDate && state.drawDate !== today() ? '' : ' (오늘)');
     const ex = excludedIds();
-    $('draw-people').innerHTML = state.members.map((m) => {
+    $('draw-people').innerHTML = state.members.filter((m) => isWeekend(m) || state.attend.has(m.id)).map((m) => {
       const off = ex.has(m.id);
       return `<label class="chip${off ? ' off' : ''}"><input type="checkbox" data-attend="${esc(m.id)}"${state.attend.has(m.id) && !off ? ' checked' : ''}${off ? ' disabled' : ''}> ${esc(m.name)}${off ? ' <small>(제외)</small>' : ''}</label>`;
     }).join('');
@@ -1392,7 +1402,7 @@ header .wrap { position: relative; }
     if (t.checked) state.attend.add(t.dataset.attend); else state.attend.delete(t.dataset.attend);
     saveAttend(); $('draw-rounds').value = ''; renderDraw();
   });
-  $('draw-all').addEventListener('click', () => { const ex = excludedIds(); state.members.forEach((m) => { if (!ex.has(m.id)) state.attend.add(m.id); }); saveAttend(); $('draw-rounds').value = ''; renderDraw(); });
+  $('draw-all').addEventListener('click', () => { const ex = excludedIds(); state.members.forEach((m) => { if (!ex.has(m.id) && isWeekend(m)) state.attend.add(m.id); }); saveAttend(); $('draw-rounds').value = ''; renderDraw(); });
   $('draw-none').addEventListener('click', () => { state.attend.clear(); saveAttend(); $('draw-rounds').value = ''; renderDraw(); });
   $('draw-courts').addEventListener('change', () => { $('draw-rounds').value = ''; renderDraw(); });
   $('draw-make').addEventListener('click', makeDraw);
@@ -1431,10 +1441,11 @@ header .wrap { position: relative; }
   function fmtDay(d) { const dt = new Date(d + 'T00:00:00'); return isNaN(dt) ? d : `${dt.getMonth() + 1}/${dt.getDate()}(${WD[dt.getDay()]})`; }
   function nextSaturday() { const d = new Date(today() + 'T00:00:00'); d.setDate(d.getDate() + ((6 - d.getDay() + 7) % 7 || 7)); const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; }
   const ATT_LABEL = { yes: '참석', no: '불참', maybe: '미정' };
+  const isWeekend = (m) => m.weekend !== false;
   function attOf(evId) {
     const map = new Map(state.attendance.filter((a) => a.event_id === evId).map((a) => [a.member_id, a.status]));
     const groups = { yes: [], no: [], maybe: [], none: [] };
-    state.members.forEach((m) => groups[map.get(m.id) || 'none'].push(m));
+    state.members.forEach((m) => { const st = map.get(m.id); if (st) groups[st].push(m); else if (isWeekend(m)) groups.none.push(m); });
     return { map, groups };
   }
   function eventTitle(e) { return `${fmtDay(e.starts_on)}${e.start_time ? ' ' + e.start_time : ''}${e.place ? ' · ' + e.place : ''}`; }
@@ -1464,7 +1475,10 @@ header .wrap { position: relative; }
       <div class="att-group"><span class="lab">미정</span><span class="att-names">${names(groups.maybe)}</span></div>
       <div class="att-group"><span class="lab">미응답</span><span class="att-names">${names(groups.none)}</span></div>
       ${past ? '' : `<details class="more" data-att-open="${id}"${open ? ' open' : ''}><summary>다른 멤버 대신 표시하기</summary>
-        <div class="att-rows" style="margin-top:8px">${state.members.map((m) => `<div class="att-row"><span class="n">${esc(m.name)}</span>${btns(m.id, map.get(m.id), true)}</div>`).join('')}</div></details>`}
+        <div class="att-rows" style="margin-top:8px">${state.members.filter((m) => isWeekend(m) || map.has(m.id)).map((m) => `<div class="att-row"><span class="n">${esc(m.name)}${isWeekend(m) ? '' : ' <small class="hint">(게스트)</small>'}</span>${btns(m.id, map.get(m.id), true)}</div>`).join('')}</div>
+        ${state.members.some((m) => !isWeekend(m) && !map.has(m.id)) ? `<div class="att-row" style="margin-top:8px"><span class="hint">그 밖의 멤버 추가</span>
+          <select data-att-guest="${id}" aria-label="그 밖의 멤버"><option value="">선택</option>${state.members.filter((m) => !isWeekend(m) && !map.has(m.id)).map((m) => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join('')}</select>
+          <span class="hint">고르면 ‘참석’으로 추가됩니다</span></div>` : ''}</details>`}
       <div class="pmeta"><span class="pacts">${past ? '' : `<button class="btn cmt-toggle" type="button" data-ev-draw="${id}">이 참석자로 대진표</button><button class="btn ghost cmt-toggle" type="button" data-ev-copy="${id}">카톡용 안내 복사</button>`}</span><span class="pacts">${del}</span></div>
     </article>`;
   }
@@ -1487,6 +1501,12 @@ header .wrap { position: relative; }
   $('events').addEventListener('change', (ev) => {
     const t = ev.target;
     if (t.dataset.attMe !== undefined) { store.set('entered_by', t.value || null); renderAttend(); }
+    if (t.dataset.attGuest !== undefined && t.value) {
+      if (!canWrite()) { askPin('참석 응답을 하려면 먼저 위의 클럽 PIN을 입력하세요.'); t.value = ''; return; }
+      const eid = t.dataset.attGuest, mid = t.value;
+      state.attendance.push({ event_id: eid, member_id: mid, status: 'yes' }); renderAttend();
+      rpc('set_attendance', { p_event: eid, p_member: mid, p_status: 'yes' }).then((ok) => { if (!ok) scheduleReload(); });
+    }
   });
   $('events').addEventListener('toggle', (ev) => {
     const d = ev.target; if (!d.dataset || !d.dataset.attOpen) return;
@@ -1616,7 +1636,7 @@ header .wrap { position: relative; }
   });
 
   // ---------- 새 버전 확인 ----------
-  const APP_VERSION = '2026.10.15-8';
+  const APP_VERSION = '2026.10.15-9';
   async function checkVersion() {
     try {
       const res = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
