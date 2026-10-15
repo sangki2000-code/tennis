@@ -1,0 +1,36 @@
+# Supabase 무료 프로젝트는 일주일 정도 접속이 없으면 일시 정지됩니다.
+# 이틀마다 앱 서버에 가볍게 접속해서 멈추지 않게 합니다.
+# 접속에 실패하면(서버가 이미 정지됨 등) 작업이 실패로 끝나고, GitHub가 저장소 주인에게 메일로 알려 줍니다.
+name: Supabase keep-alive
+
+on:
+  schedule:
+    - cron: '17 21 */2 * *'   # 이틀마다 한국 시간 오전 6시 17분
+  workflow_dispatch:          # Actions 탭에서 직접 실행할 수도 있음
+
+permissions:
+  contents: read
+  actions: write              # 아래 keepalive 단계가 이 예약 작업을 계속 켜 두는 데 필요
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ping Supabase
+        run: |
+          URL=$(grep -o "https://[a-z0-9]*\.supabase\.co" config.js | head -1)
+          KEY=$(grep -o "eyJ[A-Za-z0-9._-]*" config.js | head -1)
+          for i in 1 2 3; do
+            code=$(curl -s -o /tmp/out.json -w '%{http_code}' "$URL/rest/v1/members?select=id&limit=1" \
+              -H "apikey: $KEY" -H "Authorization: Bearer $KEY")
+            echo "Attempt $i: HTTP $code"
+            if [ "$code" = "200" ]; then cat /tmp/out.json; echo; exit 0; fi
+            sleep 20
+          done
+          echo "::error::Supabase에 접속하지 못했습니다. 프로젝트가 일시 정지됐는지 Supabase 대시보드를 확인하세요."
+          exit 1
+
+      # 저장소에 60일 동안 변경이 없으면 GitHub가 예약 작업을 자동으로 끄는데, 이를 막아 줍니다.
+      - uses: liskin/gh-workflow-keepalive@v1
