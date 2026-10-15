@@ -249,3 +249,36 @@ test('같은 조 두 쌍(성훈·문배, 왕태·기웅): 해당 인원이 오�
     }
   }
 });
+
+const N = 'N'; // 성낙호 등 일반 멤버
+const rules4 = { ...rules3, avoidPairs: [[S, J, 30], [S, H, 15]] };
+const pairN = (ms, x, y) => ms.filter((m) => paired(m, x, y)).length;
+
+test('짝 피하기: 문배·기웅이 없으면 상기는 다른 멤버 우선, 성훈은 그다음, 진호는 최후', () => {
+  for (let t = 0; t < 10; t++) {
+    // 다른 멤버(N, k)가 있으면 성훈·진호와는 짝 안 함
+    let ms = makeBestDraw({ players: [S, J, H, N, 'k'], rounds: 5, rules: rules4 }, 300).rounds.flat();
+    assert.strictEqual(pairN(ms, S, J), 0, 'S-J');
+    assert.strictEqual(pairN(ms, S, H), 0, 'S-H');
+    // 4명뿐이면(상기·진호·성훈·N) N과 짝 — 성훈·진호는 피함
+    ms = makeBestDraw({ players: [S, J, H, N], rounds: 3, rules: rules4 }, 100).rounds.flat();
+    assert.ok(ms.every((m) => paired(m, S, N)));
+  }
+});
+
+test('짝 피하기: 성훈·진호밖에 없으면 성훈과 먼저 짝', () => {
+  for (let t = 0; t < 10; t++) {
+    // 상기·진호·성훈·문배 없이... 상기 짝 후보가 진호·성훈뿐인 4명: S, J, H, + 상기와 짝 피할 수 없는 상황 만들기 위해 N은 1경기만
+    const ms = makeBestDraw({ players: [S, J, H, 'x'], rounds: 3, rules: { ...rules4, avoidPairs: [[S, J, 30], [S, H, 15], [S, 'x', 100]] } }, 200).rounds.flat();
+    assert.strictEqual(pairN(ms, S, J), 0, '진호와 짝이 되면 안 됨');
+    assert.ok(pairN(ms, S, H) >= 1, '성훈 먼저');
+  }
+});
+
+test('짝 피하기: 문배·기웅이 오면 기존 규칙대로 (피하기 규칙은 영향 없음)', () => {
+  for (let t = 0; t < 5; t++) {
+    const ms = makeBestDraw({ players: [S, G, M, J, H, W], rounds: 6, rules: rules4 }, 300).rounds.flat();
+    assert.strictEqual(pairN(ms, S, J) + pairN(ms, S, H), 0);
+    assert.ok(ms.some((m) => m.rivalry) && ms.some((m) => paired(m, S, M)) && ms.some((m) => paired(m, H, M)) && ms.some((m) => paired(m, W, G)));
+  }
+});
