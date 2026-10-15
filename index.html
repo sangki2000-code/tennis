@@ -207,6 +207,15 @@ textarea { font: 400 15px var(--font-body); color: var(--fg); background: var(--
 details.more > summary { cursor: pointer; color: var(--court); font-size: 14px; }
 .dday { display: inline-block; font: 700 12px var(--font-body); color: var(--surface); background: var(--court); border-radius: 4px; padding: 1px 6px; margin-left: 6px; vertical-align: 2px; }
 .share-card { display: grid; gap: 10px; }
+.medals { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; }
+.medal { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 8px 6px; text-align: center; min-width: 0; }
+.medal .i { font-size: 26px; line-height: 1.2; }
+.medal .n { font-weight: 700; font-size: 13px; color: var(--fg); }
+.medal .d { color: var(--muted); font-size: 11px; }
+.medal.off { opacity: .45; filter: grayscale(1); }
+.medal.off .n { font-weight: 600; }
+.tile.award .v { font: 700 18px/1.35 var(--font-body); overflow-wrap: anywhere; }
+.tile.award .v .namelink { font: inherit; }
 .share-card img { width: 100%; max-width: 540px; border-radius: 10px; border: 1px solid var(--line); background: #fff; }
 .chart { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 6px 6px; touch-action: pan-y; }
 .chart svg { display: block; width: 100%; height: auto; overflow: visible; }
@@ -323,6 +332,26 @@ header .wrap { position: relative; }
         </div>
       </div>
       <div id="standings"></div>
+      <div style="display:grid;gap:10px" id="award-panel">
+        <h3 class="sec">월간 시상</h3>
+        <div class="filters">
+          <div class="field">
+            <label for="award-month">월</label>
+            <select id="award-month"></select>
+          </div>
+        </div>
+        <div id="awards"></div>
+        <div class="share-card">
+          <div class="row"><button class="btn ghost cmt-toggle" type="button" id="award-make">📷 시상 이미지 만들기</button></div>
+          <div id="award-out" hidden style="display:grid;gap:10px">
+            <img id="award-img" alt="월간 시상 이미지">
+            <div class="row">
+              <button class="btn" type="button" id="award-send">공유하기 (카톡)</button>
+              <a class="btn ghost" id="award-save" download="tennis-awards.png" style="text-decoration:none">이미지 저장</a>
+            </div>
+          </div>
+        </div>
+      </div>
       <div style="display:grid;gap:10px">
         <h3 class="sec">순위 변동</h3>
         <p class="hint">경기 날짜마다 그날까지의 순위입니다(위로 갈수록 높은 순위). 이름을 눌러 최대 3명까지 강조해 볼 수 있습니다.</p>
@@ -587,11 +616,11 @@ header .wrap { position: relative; }
     </section>
   </div>
 </main>
-<footer class="ver wrap">법무연수원 테니스 클럽 랭킹 · 버전 <span id="app-ver">2026.10.15-15</span> · <button type="button" class="namelink" id="master-link" style="font-size:12px;font-weight:500;color:var(--muted)">마스터</button></footer>
+<footer class="ver wrap">법무연수원 테니스 클럽 랭킹 · 버전 <span id="app-ver">2026.10.15-16</span> · <button type="button" class="namelink" id="master-link" style="font-size:12px;font-weight:500;color:var(--muted)">마스터</button></footer>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="config.js?v=2026.10.15-15"></script>
-<script src="ranking.js?v=2026.10.15-15"></script>
+<script src="config.js?v=2026.10.15-16"></script>
+<script src="ranking.js?v=2026.10.15-16"></script>
 <script>
 (function () {
   'use strict';
@@ -767,6 +796,8 @@ header .wrap { position: relative; }
         <div class="tile"><div class="k">현재 흐름</div><div class="v">${streak}</div><div class="s">최다 연승 ${d.bestWinStreak}</div></div>
       </div>
 
+      ${partnerSummaryHtml(id)}
+      ${badgesHtml(id)}
       ${playerChartsHtml(id)}
       <h3 class="sec">상대 전적</h3>
       <div class="table-scroll"><table class="small">
@@ -888,7 +919,7 @@ header .wrap { position: relative; }
   function renderAll() {
     // 다시 그려도 입력 중이던 칸의 포커스와 커서 위치를 지킵니다.
     const a = document.activeElement, keepId = a && a.id, sel = a && typeof a.selectionStart === 'number' ? [a.selectionStart, a.selectionEnd] : null;
-    renderSelects(); renderStandings(); renderPlayer(); renderLog(); renderBoard(); renderAttend(); renderDraw(); renderShareDates(); renderBump(); renderMembers(); updatePreview(); applyWriteState();
+    renderSelects(); renderStandings(); renderPlayer(); renderLog(); renderBoard(); renderAttend(); renderDraw(); renderShareDates(); renderAwards(); renderBump(); renderMembers(); updatePreview(); applyWriteState();
     if (keepId && document.activeElement !== a) {
       const el = document.getElementById(keepId);
       if (el) { try { el.focus({ preventScroll: true }); if (sel) el.setSelectionRange(sel[0], sel[1]); } catch (e) {} }
@@ -1885,6 +1916,119 @@ header .wrap { position: relative; }
     try { await navigator.share({ files: [file], title: `${fmtDay(date)} 경기 결과`, text: `${fmtDay(date)} 경기 결과와 현재 순위입니다.` }); }
     catch (e) { if (e && e.name !== 'AbortError') setStatus('공유하지 못했습니다. ‘이미지 저장’ 후 카톡에서 사진으로 보내 주세요.', true); }
   });
+  // ---------- 최고의 파트너 · 천적 / 배지 ----------
+  const rateTxt = (x) => `${x.wins}승${x.draws ? ` ${x.draws}무` : ''} ${x.losses}패 · 승률 ${Math.round(x.rate * 100)}%`;
+  function partnerSummaryHtml(id) {
+    const s = R.partnerSummary(id, state.matches);
+    const card = (k, x, sub) => `<div class="tile award"><div class="k">${k}</div><div class="v">${x ? `<button type="button" class="namelink" data-player="${esc(x.id)}">${esc(memberName(x.id))}</button>` : '–'}</div><div class="s">${x ? sub + rateTxt(x) : '아직 기록이 부족합니다'}</div></div>`;
+    return `<h3 class="sec">최고의 파트너 · 천적</h3>
+      <div class="tiles">
+        ${card('🤝 최고의 파트너', s.bestPartner, '함께 ')}
+        ${card('😈 천적', s.nemesis, '상대로 ')}
+        ${card('😎 자신 있는 상대', s.favorite, '상대로 ')}
+      </div>
+      <p class="hint">2경기 이상 함께(상대로) 한 사람 중 승률로 고릅니다. 무승부는 반 승으로 칩니다.</p>`;
+  }
+  function badgesHtml(id) {
+    const list = R.playerBadges(id, state.members, state.matches, state.settings, { currentMonth: today().slice(0, 7) });
+    const got = list.filter((b) => b.got), off = list.filter((b) => !b.got);
+    const when = (b) => (b.key === 'month_champ' ? `${monthLabel(b.date).replace(/^\d+년 /, '')}${b.count > 1 ? ` 외 ${b.count - 1}회` : ''}` : fmtDay(b.date));
+    return `<h3 class="sec">배지 <span class="hint">${got.length} / ${list.length}</span></h3>
+      <div class="medals">${got.concat(off).map((b) => `<div class="medal${b.got ? '' : ' off'}" title="${esc(b.desc)}"><div class="i" aria-hidden="true">${b.icon}</div><div class="n">${esc(b.label)}</div><div class="d">${b.got ? when(b) : esc(b.desc)}</div></div>`).join('')}</div>`;
+  }
+
+  // ---------- 월간 시상 ----------
+  function awardRows(a) {
+    const names = (x) => x.ids.map((i) => `<button type="button" class="namelink" data-player="${esc(i)}">${esc(memberName(i))}</button>`).join(', ');
+    return [
+      ['👑 이달의 1위', a.champion, (x) => `${x.wins}승${x.draws ? ` ${x.draws}무` : ''} ${x.losses}패 · 승점 ${x.points}`],
+      ['🏆 최다 승리', a.mostWins, (x) => `${x.value}승`],
+      ['📅 개근상', a.attendance, (x) => `${x.value}일 출석 (이달 경기일 ${a.days}일)`],
+      ['📈 레이팅 상승', a.ratingUp, (x) => `▲${x.value}`],
+    ].map(([k, x, sub]) => ({ k, x, names: x ? names(x) : '', plain: x ? x.ids.map(memberName).join(', ') : '', sub: x ? sub(x) : '해당자 없음' }));
+  }
+  function renderAwards() {
+    const sel = $('award-month'); if (!sel) return;
+    const months = R.listMonths(state.matches), keep = sel.value;
+    sel.innerHTML = months.length ? months.map((m) => `<option value="${m}">${monthLabel(m)}${m === today().slice(0, 7) ? ' (진행 중)' : ''}</option>`).join('') : '<option value="">경기 기록 없음</option>';
+    if (months.includes(keep)) sel.value = keep;
+    $('award-make').disabled = !months.length;
+    if (!months.length) { $('awards').innerHTML = '<p class="hint">경기 기록이 쌓이면 달마다 시상이 나옵니다.</p>'; return; }
+    const a = R.monthlyAwards(state.members, state.matches, sel.value, state.settings);
+    $('awards').innerHTML = `<div class="tiles">${awardRows(a).map((r) => `<div class="tile award"><div class="k">${r.k}</div><div class="v">${r.names || '–'}</div><div class="s">${r.sub}</div></div>`).join('')}</div>
+      <p class="hint" style="margin-top:6px">${monthLabel(a.month)} · ${a.matches}경기 · 경기일 ${a.days}일${a.month === today().slice(0, 7) ? ' · 이번 달은 진행 중이라 결과가 바뀔 수 있습니다' : ''}</p>`;
+  }
+  $('award-month').addEventListener('change', () => { $('award-out').hidden = true; renderAwards(); });
+  async function makeAwardImage(month) {
+    try { await document.fonts.ready; } catch (e) {}
+    const a = R.monthlyAwards(state.members, state.matches, month, state.settings);
+    const rows = awardRows(a);
+    const ms = state.matches.filter((m) => (m.date || '').slice(0, 7) === month);
+    const ids = new Set(ms.flatMap((m) => m.teamA.concat(m.teamB)));
+    const st = R.computeStandings(state.members.filter((m) => ids.has(m.id)), ms, state.settings).slice(0, 10);
+    const W = 1080, PAD = 64, HEAD = 250, AW = 150, TROW = 66;
+    const H = HEAD + 50 + rows.length * AW + 110 + st.length * TROW + 110;
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+    const c = cv.getContext('2d');
+    const F = (w, size, fam) => `${w} ${size}px ${fam === 'd' ? '"Barlow Condensed", "Arial Narrow", sans-serif' : '"IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif'}`;
+    const C = { bg: '#ffffff', fg: '#17301a', muted: '#6b7d6a', line: '#dfe9db', green: '#2f7d32', soft: '#f1f7ee' };
+    c.fillStyle = C.bg; c.fillRect(0, 0, W, H);
+    const grass = await loadImg('icons/grass.jpg');
+    if (grass) c.drawImage(grass, 0, 0, grass.width, grass.width * HEAD / W, 0, 0, W, HEAD); else { c.fillStyle = '#3f8f3a'; c.fillRect(0, 0, W, HEAD); }
+    c.fillStyle = 'rgba(18,60,20,.28)'; c.fillRect(0, 0, W, HEAD);
+    c.strokeStyle = 'rgba(255,255,255,.85)'; c.lineWidth = 4;
+    c.strokeRect(W * 0.62, 26, W, HEAD); c.beginPath(); c.moveTo(W * 0.8, 26); c.lineTo(W * 0.8, HEAD); c.stroke();
+    c.fillStyle = '#fff'; c.textBaseline = 'alphabetic';
+    c.font = F(600, 28, 'b'); c.fillText('법무연수원 테니스 클럽', PAD, 88);
+    c.font = F(700, 64, 'b'); c.fillText(`${monthLabel(month)} 시상`, PAD, 170);
+    c.font = F(500, 26, 'b'); c.fillStyle = 'rgba(255,255,255,.9)';
+    c.fillText(`${a.matches}경기 · 경기일 ${a.days}일${month === today().slice(0, 7) ? ` · ${fmtDay(today())} 기준` : ''}`, PAD, 214);
+    let y = HEAD + 40;
+    rows.forEach((r, i) => {
+      const top = y + i * AW;
+      c.fillStyle = i % 2 ? C.bg : C.soft; c.fillRect(PAD - 20, top, W - 2 * (PAD - 20), AW - 12);
+      c.font = F(600, 28, 'b'); c.fillStyle = C.muted; c.fillText(r.k, PAD, top + 44);
+      c.font = F(700, 46, 'b'); c.fillStyle = r.x ? C.fg : C.muted; c.fillText(fitText(c, r.plain || '해당자 없음', W - PAD * 2), PAD, top + 100);
+      if (r.x) { c.font = F(600, 28, 'b'); c.fillStyle = C.green; c.textAlign = 'right'; c.fillText(fitText(c, r.sub, 420), W - PAD, top + 44); c.textAlign = 'left'; }
+    });
+    y += rows.length * AW + 60;
+    c.fillStyle = C.fg; c.font = F(700, 36, 'b'); c.fillText(`${monthLabel(month)} 순위`, PAD, y); y += 50;
+    const cols = [PAD, PAD + 90, PAD + 520, PAD + 760];
+    c.font = F(600, 24, 'b'); c.fillStyle = C.muted;
+    ['순위', '이름', '승-무-패', '승점'].forEach((t, i) => c.fillText(t, cols[i], y));
+    y += 16; c.fillStyle = C.line; c.fillRect(PAD - 20, y, W - 2 * (PAD - 20), 2); y += 10;
+    st.forEach((s0, i) => {
+      const top = y + i * TROW, base = top + 45;
+      if (i % 2 === 0) { c.fillStyle = C.soft; c.fillRect(PAD - 20, top, W - 2 * (PAD - 20), TROW); }
+      c.fillStyle = s0.rank === 1 ? C.green : C.fg; c.font = F(700, 40, 'd'); c.fillText(String(s0.rank), cols[0] + 6, base + 2);
+      c.fillStyle = C.fg; c.font = F(s0.rank <= 3 ? 700 : 500, 32, 'b'); c.fillText(fitText(c, s0.name, cols[2] - cols[1] - 20), cols[1], base);
+      c.font = F(600, 34, 'd'); c.fillText(`${s0.wins}-${s0.draws}-${s0.losses}`, cols[2], base + 2);
+      c.fillStyle = C.green; c.font = F(700, 38, 'd'); c.fillText(String(s0.points), cols[3], base + 2);
+    });
+    y += st.length * TROW + 60;
+    c.font = F(500, 22, 'b'); c.fillStyle = C.muted; c.fillText(`${location.host}${location.pathname}`, PAD, y);
+    return cv;
+  }
+  let awardBlob = null;
+  $('award-make').addEventListener('click', async () => {
+    const month = $('award-month').value; if (!month) return;
+    $('award-make').disabled = true; $('award-make').textContent = '만드는 중…';
+    try {
+      const cv = await makeAwardImage(month);
+      awardBlob = await new Promise((res) => cv.toBlob(res, 'image/png'));
+      const url = URL.createObjectURL(awardBlob);
+      $('award-img').src = url; $('award-save').href = url; $('award-save').download = `tennis-awards-${month}.png`;
+      $('award-out').hidden = false;
+      $('award-send').hidden = !(navigator.canShare && navigator.canShare({ files: [new File([awardBlob], 'a.png', { type: 'image/png' })] }));
+    } catch (e) { setStatus('이미지를 만들지 못했습니다. 다시 시도해 주세요.', true); }
+    $('award-make').disabled = false; $('award-make').textContent = '📷 시상 이미지 만들기';
+  });
+  $('award-send').addEventListener('click', async () => {
+    if (!awardBlob) return;
+    const month = $('award-month').value;
+    try { await navigator.share({ files: [new File([awardBlob], `tennis-awards-${month}.png`, { type: 'image/png' })], title: `${monthLabel(month)} 시상`, text: `${monthLabel(month)} 테니스 클럽 시상입니다.` }); }
+    catch (e) { if (e && e.name !== 'AbortError') setStatus('공유하지 못했습니다. ‘이미지 저장’ 후 카톡에서 사진으로 보내 주세요.', true); }
+  });
   $('goto-share').addEventListener('click', () => { showTab('log'); $('share-panel').scrollIntoView({ block: 'start' }); });
 
   // ---------- 게시판·댓글 이벤트 ----------
@@ -1954,7 +2098,7 @@ header .wrap { position: relative; }
   });
 
   // ---------- 새 버전 확인 ----------
-  const APP_VERSION = '2026.10.15-15';
+  const APP_VERSION = '2026.10.15-16';
   async function checkVersion() {
     try {
       const res = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });

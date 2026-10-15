@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const { parseScore, decideWinner, computeStandings } = require('../ranking');
+const R = require('../ranking');
 
 test('parseScore: 일반/타이브레이크/콜론 표기', () => {
   assert.deepStrictEqual(parseScore('6-4, 3-6, 7-6(5)'), [[6, 4], [3, 6], [7, 6]]);
@@ -280,4 +281,56 @@ test('rankHistory: 날짜별 누적 순위·레이팅, 경기 전이면 null', (
   assert.deepStrictEqual(h.byId.get('d').map((x) => x.rank), [null, null]);
   assert.strictEqual(h.byId.get('a')[0].rating, 1516);
   assert.deepStrictEqual([h.byId.get('b')[1].wins, h.byId.get('b')[1].losses], [2, 1]);
+});
+
+test('monthlyAwards: 1위·최다 승·출석·레이팅 상승', () => {
+  const mem = [{ id: 'a', name: '가' }, { id: 'b', name: '나' }, { id: 'c', name: '다' }];
+  const ms = [
+    { date: '2026-09-05', teamA: ['b'], teamB: ['a'], sets: [[6, 0]] },
+    { date: '2026-10-03', teamA: ['a'], teamB: ['b'], sets: [[6, 2]] },
+    { date: '2026-10-04', teamA: ['a'], teamB: ['c'], sets: [[6, 3]] },
+    { date: '2026-10-10', teamA: ['c'], teamB: ['b'], sets: [[6, 4]] },
+  ];
+  const aw = R.monthlyAwards(mem, ms, '2026-10');
+  assert.equal(aw.matches, 3); assert.equal(aw.days, 3);
+  assert.deepEqual(aw.champion.ids, ['a']); assert.equal(aw.champion.wins, 2);
+  assert.deepEqual(aw.mostWins, { ids: ['a'], value: 2 });
+  assert.deepEqual(aw.attendance.ids.sort(), ['a', 'b', 'c']); assert.equal(aw.attendance.value, 2);
+  assert.deepEqual(aw.ratingUp.ids, ['a']);
+  assert.equal(R.monthlyAwards(mem, ms, '2026-08').champion, null);
+});
+
+test('playerBadges: 첫 승·연승·베이글·월간 1위', () => {
+  const mem = [{ id: 'a', name: '가' }, { id: 'b', name: '나' }];
+  const ms = [
+    { date: '2026-09-01', teamA: ['a'], teamB: ['b'], sets: [[2, 6]] },
+    { date: '2026-09-02', teamA: ['a'], teamB: ['b'], sets: [[6, 0]] },
+    { date: '2026-09-03', teamA: ['b'], teamB: ['a'], sets: [[4, 6]] },
+    { date: '2026-09-04', teamA: ['a'], teamB: ['b'], sets: [[6, 4]] },
+  ];
+  const by = (list) => Object.fromEntries(list.map((x) => [x.key, x]));
+  const a = by(R.playerBadges('a', mem, ms, null, { currentMonth: '2026-10' }));
+  assert.equal(a.first_match.date, '2026-09-01');
+  assert.equal(a.first_win.date, '2026-09-02');
+  assert.equal(a.bagel.date, '2026-09-02');
+  assert.equal(a.streak3.date, '2026-09-04');
+  assert.equal(a.streak5.got, false);
+  assert.equal(a.month_champ.count, 1);
+  // 진행 중인 달은 월간 1위에 넣지 않음
+  assert.equal(by(R.playerBadges('a', mem, ms, null, { currentMonth: '2026-09' })).month_champ.got, false);
+  assert.equal(by(R.playerBadges('b', mem, ms)).bagel.got, false);
+});
+
+test('partnerSummary: 최고의 파트너·천적·자신 있는 상대', () => {
+  const ms = [
+    { date: '2026-10-01', teamA: ['a', 'b'], teamB: ['c', 'd'], sets: [[6, 2]] },
+    { date: '2026-10-02', teamA: ['a', 'b'], teamB: ['c', 'e'], sets: [[6, 3]] },
+    { date: '2026-10-03', teamA: ['a', 'c'], teamB: ['d', 'e'], sets: [[2, 6]] },
+    { date: '2026-10-04', teamA: ['a', 'c'], teamB: ['d', 'b'], sets: [[3, 6]] },
+  ];
+  const s = R.partnerSummary('a', ms);
+  assert.equal(s.bestPartner.id, 'b'); assert.equal(s.bestPartner.wins, 2);
+  assert.equal(s.nemesis.id, 'd');
+  assert.equal(s.favorite.id, 'c'); // c 상대 2전 2승
+  assert.equal(R.partnerSummary('z', ms).bestPartner, null);
 });

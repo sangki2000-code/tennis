@@ -195,6 +195,7 @@
       const delta = K * (sa - ea);
       m.teamA.forEach((id) => { r.set(id, get(id) + delta); lastDelta.set(id, delta); played.set(id, (played.get(id) || 0) + 1); });
       m.teamB.forEach((id) => { r.set(id, get(id) - delta); lastDelta.set(id, -delta); played.set(id, (played.get(id) || 0) + 1); });
+      if (opts && opts.onMatch) opts.onMatch(m, res, r);
     }
     return { ratings: r, lastDelta, games: played };
   }
@@ -433,5 +434,94 @@
     return { dates, byId };
   }
 
-  return { DEFAULT_SETTINGS, parseScore, decideWinner, formatScore, computeStandings, listMonths, filterMatches, memberDetail, computeElo, computeEloDetail, makeDoublesDraw, makeBestDraw, rankHistory };
+  // ---------- 월간 시상 ----------
+  // month 'YYYY-MM'. 그 달에 경기한 사람만 대상. 동점이면 함께 수상.
+  function monthlyAwards(members, matches, month, settings) {
+    const inMonth = matches.filter((m) => (m.date || '').slice(0, 7) === month);
+    const ids = new Set(inMonth.flatMap((m) => m.teamA.concat(m.teamB)));
+    const ms = members.filter((m) => ids.has(m.id));
+    const empty = { month, matches: inMonth.length, days: 0, champion: null, mostWins: null, attendance: null, ratingUp: null };
+    if (!inMonth.length || !ms.length) return empty;
+    const top = (rows, key) => {
+      const best = Math.max(...rows.map((r) => r[key]));
+      if (!(best > 0)) return null;
+      return { ids: rows.filter((r) => r[key] === best).map((r) => r.id), value: best };
+    };
+    const st = computeStandings(ms, inMonth, settings);
+    const champs = st.filter((s) => s.rank === 1);
+    const dayMap = new Map(ms.map((m) => [m.id, new Set()]));
+    inMonth.forEach((m) => m.teamA.concat(m.teamB).forEach((id) => dayMap.has(id) && dayMap.get(id).add(m.date)));
+    const before = computeElo(members, matches.filter((m) => (m.date || '') < month + '-01'));
+    const after = computeElo(members, matches.filter((m) => (m.date || '').slice(0, 7) <= month));
+    const up = ms.map((m) => ({ id: m.id, up: Math.round((after.get(m.id) || 1500) - (before.get(m.id) || 1500)) }));
+    return {
+      month, matches: inMonth.length, days: new Set(inMonth.map((m) => m.date)).size,
+      champion: { ids: champs.map((s) => s.id), points: champs[0].points, wins: champs[0].wins, draws: champs[0].draws, losses: champs[0].losses },
+      mostWins: top(st, 'wins'),
+      attendance: top(ms.map((m) => ({ id: m.id, days: dayMap.get(m.id).size })), 'days'),
+      ratingUp: top(up, 'up'),
+    };
+  }
+
+  // ---------- 배지 ----------
+  // 받은 배지는 date(처음 받은 날)가 채워짐. 순서는 화면에 보여 줄 순서.
+  const BADGES = [
+    { key: 'first_match', icon: '🎾', label: '첫 경기', desc: '첫 경기 출전' },
+    { key: 'first_win', icon: '🥇', label: '첫 승', desc: '첫 승리' },
+    { key: 'games10', icon: '🔟', label: '10경기', desc: '10경기 출전' },
+    { key: 'games30', icon: '💪', label: '30경기', desc: '30경기 출전' },
+    { key: 'games50', icon: '🏅', label: '50경기', desc: '50경기 출전' },
+    { key: 'games100', icon: '💯', label: '100경기', desc: '100경기 출전' },
+    { key: 'streak3', icon: '🔥', label: '3연승', desc: '3경기 연속 승리' },
+    { key: 'streak5', icon: '⚡', label: '5연승', desc: '5경기 연속 승리' },
+    { key: 'streak7', icon: '🌪️', label: '7연승', desc: '7경기 연속 승리' },
+    { key: 'bagel', icon: '🥯', label: '베이글', desc: '6-0으로 이긴 경기' },
+    { key: 'rating1550', icon: '📈', label: '레이팅 1550', desc: '레이팅 1550 돌파' },
+    { key: 'rating1600', icon: '🚀', label: '레이팅 1600', desc: '레이팅 1600 돌파' },
+    { key: 'month_champ', icon: '👑', label: '월간 1위', desc: '한 달 순위 1위 (지난 달까지)' },
+  ];
+  function playerBadges(memberId, members, matches, settings, opts) {
+    const thisMonth = (opts && opts.currentMonth) || '';
+    const got = new Map(); const give = (k, d) => { if (!got.has(k)) got.set(k, d); };
+    let n = 0, cur = 0, champMonths = 0;
+    // 레이팅은 모두의 경기로 계산하면서, 이 선수의 경기마다 배지를 확인
+    computeEloDetail(members, matches, { onMatch(m, res, r) {
+      const side = m.teamA.includes(memberId) ? 'A' : m.teamB.includes(memberId) ? 'B' : null;
+      if (!side) return;
+      const out = resultFor(res, side), d = m.date;
+      n++; give('first_match', d);
+      if (n >= 10) give('games10', d); if (n >= 30) give('games30', d); if (n >= 50) give('games50', d); if (n >= 100) give('games100', d);
+      cur = out === 'W' ? cur + 1 : 0;
+      if (out === 'W') {
+        give('first_win', d);
+        if (m.sets.some(([a, b]) => (side === 'A' ? a === 6 && b === 0 : b === 6 && a === 0))) give('bagel', d);
+      }
+      if (cur >= 3) give('streak3', d); if (cur >= 5) give('streak5', d); if (cur >= 7) give('streak7', d);
+      const myR = r.get(memberId) || 1500;
+      if (myR >= 1550) give('rating1550', d); if (myR >= 1600) give('rating1600', d);
+    } });
+    // 끝난 달만 (이번 달은 아직 진행 중)
+    for (const mo of listMonths(matches).filter((x) => !thisMonth || x < thisMonth).sort()) {
+      const a = monthlyAwards(members, matches, mo, settings);
+      if (a.champion && a.champion.ids.includes(memberId)) { champMonths++; give('month_champ', mo); }
+    }
+    return BADGES.map((b) => Object.assign({}, b, { got: got.has(b.key), date: got.get(b.key) || null, count: b.key === 'month_champ' ? champMonths : undefined }));
+  }
+
+  // ---------- 최고의 파트너 · 천적 · 자신 있는 상대 ----------
+  // 승률 = (승 + 무×0.5) / 경기. 2경기 이상 함께 한 사람 중에서 고르고, 없으면 1경기도 포함.
+  function partnerSummary(memberId, matches) {
+    const d = memberDetail(memberId, matches);
+    const rate = (x) => (x.played ? (x.wins + x.draws * 0.5) / x.played : 0);
+    const pool = (list, get) => { const two = list.filter((x) => get(x).played >= 2); return two.length ? two : list; };
+    const ps = pool(d.partners, (x) => x);
+    const best = ps.filter((p) => p.wins > 0).sort((a, b) => rate(b) - rate(a) || b.wins - a.wins || (b.gamesWon - b.gamesLost) - (a.gamesWon - a.gamesLost))[0] || null;
+    const os = pool(d.opponents, (o) => o.total);
+    const nemesis = os.filter((o) => o.total.losses > 0).sort((a, b) => rate(a.total) - rate(b.total) || b.total.losses - a.total.losses || (a.total.gamesWon - a.total.gamesLost) - (b.total.gamesWon - b.total.gamesLost))[0] || null;
+    const prey = os.filter((o) => o.total.wins > 0 && (!nemesis || o.id !== nemesis.id)).sort((a, b) => rate(b.total) - rate(a.total) || b.total.wins - a.total.wins || (b.total.gamesWon - b.total.gamesLost) - (a.total.gamesWon - a.total.gamesLost))[0] || null;
+    const pack = (x, rec) => (x ? { id: x.id, played: rec.played, wins: rec.wins, draws: rec.draws, losses: rec.losses, rate: rate(rec) } : null);
+    return { bestPartner: pack(best, best), nemesis: pack(nemesis, nemesis && nemesis.total), favorite: pack(prey, prey && prey.total) };
+  }
+
+  return { DEFAULT_SETTINGS, parseScore, decideWinner, formatScore, computeStandings, listMonths, filterMatches, memberDetail, computeElo, computeEloDetail, makeDoublesDraw, makeBestDraw, rankHistory, monthlyAwards, BADGES, playerBadges, partnerSummary };
 });
