@@ -203,6 +203,8 @@ textarea { font: 400 15px var(--font-body); color: var(--fg); background: var(--
 .att-row .att-btn { padding: 3px 10px; font-size: 13px; }
 details.more > summary { cursor: pointer; color: var(--court); font-size: 14px; }
 .dday { display: inline-block; font: 700 12px var(--font-body); color: var(--surface); background: var(--court); border-radius: 4px; padding: 1px 6px; margin-left: 6px; vertical-align: 2px; }
+.share-card { display: grid; gap: 10px; }
+.share-card img { width: 100%; max-width: 540px; border-radius: 10px; border: 1px solid var(--line); background: #fff; }
 .update-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; border-color: var(--court); font-weight: 600; }
 footer.ver { color: var(--muted); font-size: 12px; text-align: center; padding-block: 0 32px; }
 .inline-form { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -282,6 +284,7 @@ header .wrap { position: relative; }
       <div>
         <h2 id="rank-title">전체 순위</h2>
         <p class="hint" id="rule-hint">승점 → 승률 → 게임 득실차 → 게임 득점 순으로 정렬합니다.</p>
+        <button class="btn ghost cmt-toggle" type="button" id="goto-share" style="margin-top:6px">📷 카톡 공유 이미지 만들기</button>
       </div>
       <div class="filters">
         <div class="field">
@@ -435,6 +438,24 @@ header .wrap { position: relative; }
         <h2>경기 기록</h2>
         <p class="hint">최신 경기가 위에 표시됩니다. 굵은 줄이 승리 팀입니다. 수정·삭제는 마스터만 할 수 있습니다.</p>
       </div>
+      <div class="panel share-card" id="share-panel">
+        <strong>카톡 공유용 결과 이미지</strong>
+        <div class="row" style="align-items:end">
+          <div class="field" style="flex:0 1 200px">
+            <label for="share-date">경기 날짜</label>
+            <select id="share-date"></select>
+          </div>
+          <button class="btn" type="button" id="share-make">이미지 만들기</button>
+        </div>
+        <div id="share-out" hidden style="display:grid;gap:10px">
+          <img id="share-img" alt="경기 결과와 현재 순위 이미지">
+          <div class="row">
+            <button class="btn" type="button" id="share-send">공유하기 (카톡)</button>
+            <a class="btn ghost" id="share-save" download="tennis-result.png" style="text-decoration:none">이미지 저장</a>
+          </div>
+          <p class="hint">공유 버튼이 안 되면 ‘이미지 저장’을 누르거나 이미지를 길게 눌러 저장한 뒤 카톡에서 사진으로 보내세요.</p>
+        </div>
+      </div>
       <div class="field" style="max-width:280px">
         <label for="log-filter">멤버별 보기</label>
         <select id="log-filter"></select>
@@ -544,11 +565,11 @@ header .wrap { position: relative; }
     </section>
   </div>
 </main>
-<footer class="ver wrap">법무연수원 테니스 클럽 랭킹 · 버전 <span id="app-ver">2026.10.15-11</span> · <button type="button" class="namelink" id="master-link" style="font-size:12px;font-weight:500;color:var(--muted)">마스터</button></footer>
+<footer class="ver wrap">법무연수원 테니스 클럽 랭킹 · 버전 <span id="app-ver">2026.10.15-12</span> · <button type="button" class="namelink" id="master-link" style="font-size:12px;font-weight:500;color:var(--muted)">마스터</button></footer>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="config.js?v=2026.10.15-11"></script>
-<script src="ranking.js?v=2026.10.15-11"></script>
+<script src="config.js?v=2026.10.15-12"></script>
+<script src="ranking.js?v=2026.10.15-12"></script>
 <script>
 (function () {
   'use strict';
@@ -842,7 +863,7 @@ header .wrap { position: relative; }
   function renderAll() {
     // 다시 그려도 입력 중이던 칸의 포커스와 커서 위치를 지킵니다.
     const a = document.activeElement, keepId = a && a.id, sel = a && typeof a.selectionStart === 'number' ? [a.selectionStart, a.selectionEnd] : null;
-    renderSelects(); renderStandings(); renderPlayer(); renderLog(); renderBoard(); renderAttend(); renderDraw(); renderMembers(); updatePreview(); applyWriteState();
+    renderSelects(); renderStandings(); renderPlayer(); renderLog(); renderBoard(); renderAttend(); renderDraw(); renderShareDates(); renderMembers(); updatePreview(); applyWriteState();
     if (keepId && document.activeElement !== a) {
       const el = document.getElementById(keepId);
       if (el) { try { el.focus({ preventScroll: true }); if (sel) el.setSelectionRange(sel[0], sel[1]); } catch (e) {} }
@@ -1597,6 +1618,117 @@ header .wrap { position: relative; }
   // 지난번 시간·장소를 기본값으로
   try { const l = JSON.parse(store.get('ev_last') || 'null'); if (l) { $('ev-time').value = l.time || ''; $('ev-place').value = l.place || ''; } } catch (e) {}
 
+
+  // ---------- 카톡 공유 이미지 ----------
+  function matchDates() { return [...new Set(state.matches.map((m) => m.date))].sort().reverse(); }
+  function renderShareDates() {
+    const sel = $('share-date'); if (!sel) return;
+    const keep = sel.value, ds = matchDates();
+    sel.innerHTML = ds.length ? ds.map((d) => `<option value="${d}">${fmtDay(d)}</option>`).join('') : '<option value="">경기 기록 없음</option>';
+    if (ds.includes(keep)) sel.value = keep;
+    $('share-make').disabled = !ds.length;
+  }
+  const loadImg = (src) => new Promise((res) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = src; });
+  function fitText(ctx, text, maxW) {
+    if (ctx.measureText(text).width <= maxW) return text;
+    let t = text; while (t.length > 1 && ctx.measureText(t + '…').width > maxW) t = t.slice(0, -1);
+    return t + '…';
+  }
+  async function makeShareImage(date) {
+    try { await document.fonts.ready; } catch (e) {}
+    const W = 1080, PAD = 64;
+    const ms = state.matches.filter((m) => m.date === date).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+    const elo = R.computeEloDetail(state.members, state.matches.filter((m) => m.date <= date));
+    const upto = state.matches.filter((m) => m.date <= date);
+    const playedIds = new Set(upto.flatMap((m) => m.teamA.concat(m.teamB)));
+    const st = R.computeStandings(state.members.filter((m) => playedIds.has(m.id)), upto, state.settings).slice(0, 12);
+    const HEAD = 250, ROW = 118, TROW = 70;
+    const H = HEAD + 70 + Math.max(1, ms.length) * ROW + 90 + 60 + st.length * TROW + 110;
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+    const c = cv.getContext('2d');
+    const F = (w, size, fam) => `${w} ${size}px ${fam === 'd' ? '"Barlow Condensed", "Arial Narrow", sans-serif' : '"IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif'}`;
+    const C = { bg: '#ffffff', fg: '#17301a', muted: '#6b7d6a', line: '#dfe9db', green: '#2f7d32', ball: '#d6e43a', win: '#1d7a4c', soft: '#f1f7ee' };
+    c.fillStyle = C.bg; c.fillRect(0, 0, W, H);
+    // 머리: 잔디 코트
+    const grass = await loadImg('icons/grass.jpg');
+    if (grass) c.drawImage(grass, 0, 0, grass.width, grass.width * HEAD / W, 0, 0, W, HEAD); else { c.fillStyle = '#3f8f3a'; c.fillRect(0, 0, W, HEAD); }
+    c.fillStyle = 'rgba(18,60,20,.28)'; c.fillRect(0, 0, W, HEAD);
+    c.strokeStyle = 'rgba(255,255,255,.85)'; c.lineWidth = 4;
+    c.strokeRect(W * 0.62, 26, W, HEAD); c.beginPath(); c.moveTo(W * 0.8, 26); c.lineTo(W * 0.8, HEAD); c.stroke();
+    c.fillStyle = '#fff'; c.textBaseline = 'alphabetic';
+    c.font = F(600, 28, 'b'); c.fillText('법무연수원 테니스 클럽', PAD, 88);
+    c.font = F(700, 64, 'b'); c.fillText(`${fmtDay(date)} 경기 결과`, PAD, 170);
+    c.font = F(500, 26, 'b'); c.fillStyle = 'rgba(255,255,255,.9)'; c.fillText(`${ms.length}경기`, PAD, 214);
+    // 경기 결과
+    let y = HEAD + 64;
+    c.fillStyle = C.fg; c.font = F(700, 36, 'b'); c.fillText(date === today() ? '오늘의 경기' : '이날의 경기', PAD, y); y += 26;
+    const nm = (ids) => ids.map(memberName).join(' · ');
+    ms.forEach((m, i) => {
+      const r = R.decideWinner(m.sets);
+      const top = y + i * ROW;
+      c.fillStyle = i % 2 ? C.bg : C.soft; c.fillRect(PAD - 20, top, W - 2 * (PAD - 20), ROW - 10);
+      const line = (ids, side, yy) => {
+        const won = r.winner === side;
+        c.font = F(won ? 700 : 500, 34, 'b'); c.fillStyle = won ? C.fg : C.muted;
+        c.fillText(fitText(c, nm(ids), W - PAD * 2 - 260), PAD, yy);
+        if (won) { c.fillStyle = C.ball; c.beginPath(); c.arc(PAD - 2 + Math.min(c.measureText(nm(ids)).width, W - PAD * 2 - 260) + 22, yy - 11, 9, 0, Math.PI * 2); c.fill(); }
+        c.font = F(700, 40, 'd');
+        m.sets.forEach(([a, b], k) => {
+          const mine = side === 'A' ? a : b, theirs = side === 'A' ? b : a;
+          c.fillStyle = mine > theirs ? C.fg : C.muted;
+          c.textAlign = 'center'; c.fillText(String(mine), W - PAD - 30 - (m.sets.length - 1 - k) * 64, yy + 2); c.textAlign = 'left';
+        });
+      };
+      line(m.teamA, 'A', top + 44); line(m.teamB, 'B', top + 92);
+      if (r.winner === 'D') { c.font = F(600, 22, 'b'); c.fillStyle = C.muted; c.textAlign = 'right'; c.fillText('무승부', W - PAD - 160, top + 70); c.textAlign = 'left'; }
+    });
+    if (!ms.length) { c.font = F(500, 30, 'b'); c.fillStyle = C.muted; c.fillText('이 날 경기 기록이 없습니다', PAD, y + 60); }
+    y += Math.max(1, ms.length) * ROW + 70;
+    // 순위
+    c.fillStyle = C.fg; c.font = F(700, 36, 'b'); c.fillText(`현재 순위 (${fmtDay(date)}까지)`, PAD, y); y += 50;
+    const cols = [PAD, PAD + 90, PAD + 470, PAD + 650, PAD + 800];
+    c.font = F(600, 24, 'b'); c.fillStyle = C.muted;
+    ['순위', '이름', '승-무-패', '승점', '레이팅'].forEach((t, i) => c.fillText(t, cols[i], y));
+    y += 16; c.fillStyle = C.line; c.fillRect(PAD - 20, y, W - 2 * (PAD - 20), 2); y += 10;
+    st.forEach((s0, i) => {
+      const top = y + i * TROW;
+      if (i % 2 === 0) { c.fillStyle = C.soft; c.fillRect(PAD - 20, top, W - 2 * (PAD - 20), TROW); }
+      const base = top + 47;
+      c.fillStyle = s0.rank === 1 ? C.green : C.fg; c.font = F(700, 40, 'd'); c.fillText(String(s0.rank), cols[0] + 6, base + 2);
+      c.fillStyle = C.fg; c.font = F(s0.rank <= 3 ? 700 : 500, 32, 'b'); c.fillText(fitText(c, s0.name, cols[2] - cols[1] - 20), cols[1], base);
+      c.font = F(600, 34, 'd'); c.fillStyle = C.fg; c.fillText(`${s0.wins}-${s0.draws}-${s0.losses}`, cols[2], base + 2);
+      c.fillStyle = C.green; c.font = F(700, 38, 'd'); c.fillText(String(s0.points), cols[3], base + 2);
+      c.fillStyle = C.fg; c.font = F(600, 34, 'd'); c.fillText(String(Math.round(elo.ratings.get(s0.id) || 1500)), cols[4], base + 2);
+    });
+    y += st.length * TROW + 60;
+    c.font = F(500, 22, 'b'); c.fillStyle = C.muted;
+    c.fillText(`승리 ${state.settings.winPoints} · 무 ${state.settings.drawPoints} · 패 ${state.settings.lossPoints}점  ·  ${location.host}${location.pathname}`, PAD, y);
+    return cv;
+  }
+  let shareBlob = null;
+  $('share-make').addEventListener('click', async () => {
+    const date = $('share-date').value; if (!date) return;
+    $('share-make').disabled = true; $('share-make').textContent = '만드는 중…';
+    try {
+      const cv = await makeShareImage(date);
+      shareBlob = await new Promise((res) => cv.toBlob(res, 'image/png'));
+      const url = URL.createObjectURL(shareBlob);
+      $('share-img').src = url; $('share-save').href = url; $('share-save').download = `tennis-${date}.png`;
+      $('share-out').hidden = false;
+      const canShare = !!(navigator.canShare && navigator.canShare({ files: [new File([shareBlob], 'a.png', { type: 'image/png' })] }));
+      $('share-send').hidden = !canShare;
+    } catch (e) { setStatus('이미지를 만들지 못했습니다. 다시 시도해 주세요.', true); }
+    $('share-make').disabled = false; $('share-make').textContent = '이미지 만들기';
+  });
+  $('share-send').addEventListener('click', async () => {
+    if (!shareBlob) return;
+    const date = $('share-date').value;
+    const file = new File([shareBlob], `tennis-${date}.png`, { type: 'image/png' });
+    try { await navigator.share({ files: [file], title: `${fmtDay(date)} 경기 결과`, text: `${fmtDay(date)} 경기 결과와 현재 순위입니다.` }); }
+    catch (e) { if (e && e.name !== 'AbortError') setStatus('공유하지 못했습니다. ‘이미지 저장’ 후 카톡에서 사진으로 보내 주세요.', true); }
+  });
+  $('goto-share').addEventListener('click', () => { showTab('log'); $('share-panel').scrollIntoView({ block: 'start' }); });
+
   // ---------- 게시판·댓글 이벤트 ----------
   document.addEventListener('input', (ev) => {
     const t = ev.target; if (!t.dataset || !t.dataset.draft) return;
@@ -1664,7 +1796,7 @@ header .wrap { position: relative; }
   });
 
   // ---------- 새 버전 확인 ----------
-  const APP_VERSION = '2026.10.15-11';
+  const APP_VERSION = '2026.10.15-12';
   async function checkVersion() {
     try {
       const res = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
