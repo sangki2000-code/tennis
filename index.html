@@ -565,11 +565,11 @@ header .wrap { position: relative; }
     </section>
   </div>
 </main>
-<footer class="ver wrap">법무연수원 테니스 클럽 랭킹 · 버전 <span id="app-ver">2026.10.15-12</span> · <button type="button" class="namelink" id="master-link" style="font-size:12px;font-weight:500;color:var(--muted)">마스터</button></footer>
+<footer class="ver wrap">법무연수원 테니스 클럽 랭킹 · 버전 <span id="app-ver">2026.10.15-13</span> · <button type="button" class="namelink" id="master-link" style="font-size:12px;font-weight:500;color:var(--muted)">마스터</button></footer>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="config.js?v=2026.10.15-12"></script>
-<script src="ranking.js?v=2026.10.15-12"></script>
+<script src="config.js?v=2026.10.15-13"></script>
+<script src="ranking.js?v=2026.10.15-13"></script>
 <script>
 (function () {
   'use strict';
@@ -1309,7 +1309,7 @@ header .wrap { position: relative; }
 
   // ---------- 대진표 ----------
   // 대진표 규칙은 서버(비공개)에 있고 마스터 로그인 때만 불러옵니다. 대진표 짜기도 마스터만 합니다.
-  const EMPTY_RULES = { exclude: [], partnerOf: {}, preferPairs: [], avoidPairs: [], rivalry: null };
+  const EMPTY_RULES = { exclude: [], partnerOf: {}, preferPairs: [], rivalry: null };
   state.rules = null;
   const rules = () => Object.assign({}, EMPTY_RULES, state.rules || {});
   async function loadRules() {
@@ -1341,7 +1341,6 @@ header .wrap { position: relative; }
     if (!state.rules) return '<span>규칙을 불러오는 중…</span>';
     return (r ? `<span><b>팀 대항전</b> · ${esc(r.nameA)}(${r.teamA.map(esc).join('·')}) vs ${esc(r.nameB)}(${r.teamB.map(esc).join('·')}) — 네 명이 모두 오면 대항전과 대회 준비조(${esc(r.teamA[0])}·${esc(r.teamB[0])})를 섞어서 편성</span>` : '')
       + R0.preferPairs.map(([x, y]) => `<span><b>같은 조</b> · ${esc(x)}·${esc(y)} — 둘 다 오면 한 팀 경기를 꼭 넣음</span>`).join('')
-      + (R0.avoidPairs.length ? `<span><b>짝 피하기</b> · ${esc(R0.avoidPairs[0][0])}는 ${R0.avoidPairs.map((p) => esc(p[1])).join('·')}와 가능한 한 짝 안 함 (어쩔 수 없으면 ${esc(R0.avoidPairs.slice().sort((a, b) => a[2] - b[2])[0][1])} 먼저)</span>` : '')
       + Object.entries(R0.partnerOf).map(([p, a]) => `<span><b>고정 파트너</b> · ${esc(p)}는 ${a.map(esc).join(' 또는 ')}와 짝 (같은 경기에 있을 때)</span>`).join('')
       + (R0.exclude.length ? `<span><b>제외</b> · ${R0.exclude.map(esc).join(', ')} (대진표에만 빠지고 순위·기록은 그대로)</span>` : '')
       + '<span class="hint">이 규칙은 서버에 비공개로 저장되어 마스터에게만 보입니다.</span>';
@@ -1421,8 +1420,7 @@ header .wrap { position: relative; }
     const rounds = Math.max(1, Math.min(20, Number($('draw-rounds').value) || suggestRounds(players.length, courts)));
     const ratings = R.computeElo(state.members, state.matches);
     const preferPairs = DRAW_RULES.preferPairs.map(([x, y]) => [idOf(x), idOf(y)]).filter(([x, y]) => x && y);
-    const avoidPairs = DRAW_RULES.avoidPairs.map(([x, y, w]) => [idOf(x), idOf(y), w]).filter(([x, y]) => x && y);
-    const res = R.makeBestDraw({ players, rounds, courts, rules: { partnerOf, rivalry: rivalryIds(), preferPairs, avoidPairs }, mode: 'mix', ratings }, 300);
+    const res = R.makeBestDraw({ players, rounds, courts, rules: { partnerOf, rivalry: rivalryIds(), preferPairs }, mode: 'mix', ratings }, 300);
     if (!res.rounds.length) { setStatus('규칙에 맞는 대진을 만들 수 없습니다. 참석자를 확인하세요.', true); return; }
     // 대회 준비조 표시: 고정 파트너 규칙의 사람이 첫 번째 지정 파트너와 짝인 경기
     const prepPairs = Object.entries(partnerOf).map(([p, a]) => [p, a[0]]);
@@ -1796,7 +1794,7 @@ header .wrap { position: relative; }
   });
 
   // ---------- 새 버전 확인 ----------
-  const APP_VERSION = '2026.10.15-12';
+  const APP_VERSION = '2026.10.15-13';
   async function checkVersion() {
     try {
       const res = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });

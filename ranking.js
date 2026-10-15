@@ -214,7 +214,6 @@
     const mode = opts.mode || 'mix';
     const rv = rules.rivalry && rules.rivalry.teamA && rules.rivalry.teamB ? rules.rivalry : null;
     const preferPairs = (rules.preferPairs || []).filter(([x, y]) => opts.players.includes(x) && opts.players.includes(y));
-    const avoidPairs = (rules.avoidPairs || []).filter(([x, y]) => opts.players.includes(x) && opts.players.includes(y));
     const rvAll = rv ? rv.teamA.concat(rv.teamB) : [];
     if (players.length < 4) return { rounds: [], games: new Map(), error: 'need4' };
 
@@ -251,9 +250,6 @@
         let sc = Math.abs((rate(t1[0]) + rate(t1[1])) / 2 - (rate(t2[0]) + rate(t2[1])) / 2) / 40;
         sc += 3 * ((partnered.get(key(t1[0], t1[1])) || 0) + (partnered.get(key(t2[0], t2[1])) || 0));
         for (const x of t1) for (const y of t2) sc += 0.5 * (faced.get(key(x, y)) || 0);
-        for (const [x, y, w] of avoidPairs) {
-          if ((t1.includes(x) && t1.includes(y)) || (t2.includes(x) && t2.includes(y))) sc += w || 10;
-        }
         for (const [x, y] of preferPairs) {
           if (!four.includes(x) || !four.includes(y)) continue;
           const together = (t1.includes(x) && t1.includes(y)) || (t2.includes(x) && t2.includes(y));
@@ -401,7 +397,6 @@
       if (prac === 0) sc += 40;
     }
     for (const n of pairCount.values()) sc += Math.max(0, n - 1) * 2;
-    for (const [x, y, w] of (rules.avoidPairs || [])) sc += (pairCount.get(k(x, y)) || 0) * (w || 10) * 2;
     for (const m of matches) sc += Math.abs((rate(m.teamA[0]) + rate(m.teamA[1])) / 2 - (rate(m.teamB[0]) + rate(m.teamB[1])) / 2) / 40;
     return sc;
   }
