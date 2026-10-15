@@ -383,7 +383,7 @@ header .wrap { position: relative; }
 
     <section role="tabpanel" id="p-attend" aria-labelledby="tab-attend" hidden>
       <div>
-        <h2>정기전 참석 체크</h2>
+        <h2>운동 참석 체크</h2>
         <p class="hint">일정마다 참석·불참·미정을 눌러 주세요. 응답은 모두에게 바로 보입니다. 응답과 일정 등록은 클럽 PIN이 필요하고, 일정 삭제는 마스터만 할 수 있습니다.</p>
       </div>
       <button class="btn" type="button" id="ev-new">일정 등록</button>
@@ -393,7 +393,7 @@ header .wrap { position: relative; }
           <div class="field" style="flex:0 1 120px"><label for="ev-time">시간</label><input type="text" id="ev-time" maxlength="20" placeholder="예: 07:00"></div>
           <div class="field"><label for="ev-place">장소</label><input type="text" id="ev-place" maxlength="60" placeholder="예: 법무연수원 코트"></div>
         </div>
-        <div class="field"><label for="ev-note">메모 (선택)</label><input type="text" id="ev-note" maxlength="300" placeholder="예: 정기전, 끝나고 식사"></div>
+        <div class="field"><label for="ev-note">메모 (선택)</label><input type="text" id="ev-note" maxlength="300" placeholder="예: 끝나고 식사"></div>
         <div class="row">
           <button class="btn" type="submit" id="ev-save">등록</button>
           <button class="btn ghost" type="button" id="ev-cancel">취소</button>
@@ -455,7 +455,7 @@ header .wrap { position: relative; }
           </div>
           <div class="field">
             <label for="post-title">제목</label>
-            <input type="text" id="post-title" maxlength="60" placeholder="예: 이번 주 토요일 정기전">
+            <input type="text" id="post-title" maxlength="60" placeholder="예: 이번 주 토요일 운동">
           </div>
         </div>
         <div class="field">
@@ -542,11 +542,11 @@ header .wrap { position: relative; }
     </section>
   </div>
 </main>
-<footer class="ver wrap">법무연수원 테니스 클럽 랭킹 · 버전 <span id="app-ver">2026.10.15-7</span> · <button type="button" class="namelink" id="master-link" style="font-size:12px;font-weight:500;color:var(--muted)">마스터</button></footer>
+<footer class="ver wrap">법무연수원 테니스 클럽 랭킹 · 버전 <span id="app-ver">2026.10.15-8</span> · <button type="button" class="namelink" id="master-link" style="font-size:12px;font-weight:500;color:var(--muted)">마스터</button></footer>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="config.js?v=2026.10.15-7"></script>
-<script src="ranking.js?v=2026.10.15-7"></script>
+<script src="config.js?v=2026.10.15-8"></script>
+<script src="ranking.js?v=2026.10.15-8"></script>
 <script>
 (function () {
   'use strict';
@@ -1475,13 +1475,14 @@ header .wrap { position: relative; }
     const upcoming = state.events.filter((e) => e.starts_on >= t).sort((a, b) => a.starts_on.localeCompare(b.starts_on) || (a.start_time || '').localeCompare(b.start_time || ''));
     const past = state.events.filter((e) => e.starts_on < t).slice(0, 5);
     el.innerHTML = (upcoming.length ? upcoming.map((e) => eventCard(e, false)).join('')
-      : '<div class="panel empty"><strong>다가오는 일정이 없습니다</strong>“일정 등록”을 눌러 다음 정기전을 올려 주세요.</div>')
+      : '<div class="panel empty"><strong>다가오는 일정이 없습니다</strong>“일정 등록”을 눌러 다음 운동 일정을 올려 주세요.</div>')
       + (past.length ? `<details class="more"><summary>지난 일정 ${past.length}개</summary><div class="posts" style="margin-top:10px">${past.map((e) => eventCard(e, true)).join('')}</div></details>` : '');
   }
   function attendText(e) {
     const { groups } = attOf(e.id);
     const list = (arr) => arr.map((m) => m.name).join(', ') || '없음';
-    return `🎾 ${eventTitle(e)}${e.note ? '\n' + e.note : ''}\n참석 체크 부탁드립니다 👉 ${location.origin + location.pathname}#attend\n\n참석(${groups.yes.length}): ${list(groups.yes)}\n불참(${groups.no.length}): ${list(groups.no)}\n미정(${groups.maybe.length}): ${list(groups.maybe)}\n미응답(${groups.none.length}): ${list(groups.none)}`;
+    const wd = WD[new Date(e.starts_on + 'T00:00:00').getDay()];
+    return `🎾 ${eventTitle(e)}${e.note ? '\n' + e.note : ''}\n${wd}요일 운동 참석의사 체크 바랍니다 👉 ${location.origin + location.pathname}#attend\n\n참석(${groups.yes.length}): ${list(groups.yes)}\n불참(${groups.no.length}): ${list(groups.no)}\n미정(${groups.maybe.length}): ${list(groups.maybe)}\n미응답(${groups.none.length}): ${list(groups.none)}`;
   }
   $('events').addEventListener('change', (ev) => {
     const t = ev.target;
@@ -1615,7 +1616,7 @@ header .wrap { position: relative; }
   });
 
   // ---------- 새 버전 확인 ----------
-  const APP_VERSION = '2026.10.15-7';
+  const APP_VERSION = '2026.10.15-8';
   async function checkVersion() {
     try {
       const res = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
