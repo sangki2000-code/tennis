@@ -405,7 +405,7 @@ header .wrap { position: relative; }
     <section role="tabpanel" id="p-draw" aria-labelledby="tab-draw" hidden>
       <div>
         <h2>대진표 <span id="draw-date" class="hint" style="font-size:15px"></span></h2>
-        <p class="hint">오늘 나온 멤버를 체크하고 대진표를 만드세요. 실력(레이팅)이 비슷하도록, 같은 파트너가 겹치지 않도록, 경기 수가 고르도록 짭니다.</p>
+        <p class="hint">나온 멤버를 체크하고 대진표를 만드세요. 실력(레이팅)이 비슷하도록, 같은 파트너가 겹치지 않도록, 경기 수가 고르도록 짭니다.</p>
       </div>
       <div class="notice rules" id="draw-rules"></div>
       <div class="panel" style="display:grid;gap:12px">
@@ -486,7 +486,8 @@ header .wrap { position: relative; }
 
       <div>
         <h2>멤버</h2>
-        <p class="hint">멤버 추가는 클럽 PIN으로 할 수 있습니다. 이름 수정·삭제와 <b>주말 운동</b> 표시는 마스터만 바꿀 수 있습니다. 주말 운동 멤버가 아니면 참석 체크·대진표 목록에서 빠지고, 순위와 기록에는 그대로 남습니다.</p>
+        <p class="hint">멤버 추가는 클럽 PIN으로 할 수 있습니다. 이름 수정·삭제는 마스터만 가능하며, 경기 기록이 있는 멤버는 삭제할 수 없습니다.</p>
+        <p class="hint" id="weekly-hint" hidden><b>매주 체크</b>(마스터에게만 보임): 켜진 멤버만 참석 체크의 미응답 명단과 카톡 안내에 나옵니다. 가끔 나오는 멤버는 꺼 두면, 나오는 주에 본인이 ‘참석’을 누르거나 ‘다른 멤버 추가’로 넣으면 됩니다.</p>
       </div>
       <form class="inline-form" id="member-form">
         <input type="text" id="m-name" placeholder="이름" maxlength="20" aria-label="새 멤버 이름" required>
@@ -542,11 +543,11 @@ header .wrap { position: relative; }
     </section>
   </div>
 </main>
-<footer class="ver wrap">법무연수원 테니스 클럽 랭킹 · 버전 <span id="app-ver">2026.10.15-9</span> · <button type="button" class="namelink" id="master-link" style="font-size:12px;font-weight:500;color:var(--muted)">마스터</button></footer>
+<footer class="ver wrap">법무연수원 테니스 클럽 랭킹 · 버전 <span id="app-ver">2026.10.15-10</span> · <button type="button" class="namelink" id="master-link" style="font-size:12px;font-weight:500;color:var(--muted)">마스터</button></footer>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="config.js?v=2026.10.15-9"></script>
-<script src="ranking.js?v=2026.10.15-9"></script>
+<script src="config.js?v=2026.10.15-10"></script>
+<script src="ranking.js?v=2026.10.15-10"></script>
 <script>
 (function () {
   'use strict';
@@ -810,8 +811,8 @@ header .wrap { position: relative; }
           : `<button class="btn ghost" type="button" data-mem-edit="${id}">이름 수정</button><button class="btn ghost" type="button" data-mem-del="${id}">삭제</button>`;
         const wk = m.weekend !== false;
         const wkCtl = state.masterOk
-          ? `<button class="btn ghost cmt-toggle" type="button" data-mem-weekend="${id}" data-on="${wk ? 1 : 0}" aria-pressed="${wk}">${wk ? '주말 운동 ✓' : '주말 운동 ✗'}</button>`
-          : (wk ? '' : '<span class="hint">주말 운동 아님</span>');
+          ? `<button class="btn ghost cmt-toggle" type="button" data-mem-weekend="${id}" data-on="${wk ? 1 : 0}" aria-pressed="${wk}" title="켜면 매주 참석 체크 명단(미응답)에 들어갑니다">${wk ? '매주 체크 ✓' : '매주 체크 ✗'}</button>`
+          : '';
         return `<li><span class="mname">${esc(m.name)}</span><span class="mcount">${counts.get(m.id) || 0}경기</span>${wkCtl}<span class="macts">${acts}</span></li>`;
       }).join('');
       const inp = $('member-edit-input');
@@ -833,6 +834,8 @@ header .wrap { position: relative; }
     $('master-form').hidden = state.masterOk;
     $('master-on').hidden = !state.masterOk;
     $('master-area').hidden = !state.masterOk;
+    $('weekly-hint').hidden = !state.masterOk;
+    $('draw-rules').hidden = !state.masterOk;
   }
 
   function renderAll() {
@@ -1165,7 +1168,7 @@ header .wrap { position: relative; }
     if (d.memWeekend) {
       if (!state.masterOk) { setStatus(ERRORS.bad_master, true); return; }
       const on = d.on !== '1';
-      if (await rpc('set_weekend', { p_id: d.memWeekend, p_on: on })) setStatus(`${memberName(d.memWeekend)}: 주말 운동 멤버 ${on ? '포함' : '제외'}로 바꿨습니다.`);
+      if (await rpc('set_weekend', { p_id: d.memWeekend, p_on: on })) setStatus(`${memberName(d.memWeekend)}: 매주 참석 체크 명단에 ${on ? '넣었습니다' : '넣지 않습니다 (나올 때만 참석 표시)'}.`);
       return;
     }
     if (d.memSave) {
@@ -1282,10 +1285,10 @@ header .wrap { position: relative; }
   // ---------- 대진표 ----------
   // 클럽 규칙 (이름 기준). 바꾸려면 이 부분만 고치면 됩니다.
   const DRAW_RULES = {
-    exclude: ['박정기'],                                    // 대진표에서 제외 (초보)
+    exclude: ['박정기'],                                    // 대진표 편성에서 빼는 멤버
     partnerOf: { '김상기': ['김문배', '최기웅'] },           // 김상기는 이 중 한 명과만 짝 (가장 우선하는 규칙)
     preferPairs: [['김성훈', '김문배'], ['김왕태', '최기웅']], // 둘 다 오면 같은 조 경기를 꼭 넣음
-    avoidPairs: [['김상기', '서진호', 30], ['김상기', '김성훈', 15]], // 가능한 한 짝 피하기 (숫자가 클수록 더 피함 → 어쩔 수 없으면 김성훈 먼저)
+    avoidPairs: [['김상기', '서진호', 30], ['김상기', '김성훈', 15]], // 짝 우선순위 조정 (숫자가 클수록 뒤로)
     rivalry: { nameA: '법무연수원', teamA: ['김상기', '최기웅'], nameB: '수지클럽', teamB: ['김문배', '서진호'] },
   };
   const idOf = (name) => (state.members.find((m) => m.name === name) || {}).id;
@@ -1313,7 +1316,7 @@ header .wrap { position: relative; }
     $('draw-rules').innerHTML = drawRulesHtml();
     $('draw-date').textContent = '· ' + fmtDay(state.drawDate || today()) + (state.drawDate && state.drawDate !== today() ? '' : ' (오늘)');
     const ex = excludedIds();
-    $('draw-people').innerHTML = state.members.filter((m) => isWeekend(m) || state.attend.has(m.id)).map((m) => {
+    $('draw-people').innerHTML = state.members.filter((m) => (isWeekend(m) || state.attend.has(m.id)) && (state.masterOk || !ex.has(m.id))).map((m) => {
       const off = ex.has(m.id);
       return `<label class="chip${off ? ' off' : ''}"><input type="checkbox" data-attend="${esc(m.id)}"${state.attend.has(m.id) && !off ? ' checked' : ''}${off ? ' disabled' : ''}> ${esc(m.name)}${off ? ' <small>(제외)</small>' : ''}</label>`;
     }).join('');
@@ -1365,7 +1368,7 @@ header .wrap { position: relative; }
   function makeDraw() {
     const ex = excludedIds();
     const players = [...state.attend].filter((id) => !ex.has(id) && state.members.some((m) => m.id === id));
-    if (players.length < 4) { setStatus('복식 대진표는 참석자가 4명 이상이어야 합니다. 대진표 제외 멤버는 세지 않습니다.', true); return; }
+    if (players.length < 4) { setStatus('복식 대진표는 체크된 사람이 4명 이상이어야 합니다.', true); return; }
     const partnerOf = {};
     for (const [p, allowed] of Object.entries(DRAW_RULES.partnerOf)) {
       const pid = idOf(p); if (pid) partnerOf[pid] = allowed.map(idOf).filter(Boolean);
@@ -1475,9 +1478,9 @@ header .wrap { position: relative; }
       <div class="att-group"><span class="lab">미정</span><span class="att-names">${names(groups.maybe)}</span></div>
       <div class="att-group"><span class="lab">미응답</span><span class="att-names">${names(groups.none)}</span></div>
       ${past ? '' : `<details class="more" data-att-open="${id}"${open ? ' open' : ''}><summary>다른 멤버 대신 표시하기</summary>
-        <div class="att-rows" style="margin-top:8px">${state.members.filter((m) => isWeekend(m) || map.has(m.id)).map((m) => `<div class="att-row"><span class="n">${esc(m.name)}${isWeekend(m) ? '' : ' <small class="hint">(게스트)</small>'}</span>${btns(m.id, map.get(m.id), true)}</div>`).join('')}</div>
-        ${state.members.some((m) => !isWeekend(m) && !map.has(m.id)) ? `<div class="att-row" style="margin-top:8px"><span class="hint">그 밖의 멤버 추가</span>
-          <select data-att-guest="${id}" aria-label="그 밖의 멤버"><option value="">선택</option>${state.members.filter((m) => !isWeekend(m) && !map.has(m.id)).map((m) => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join('')}</select>
+        <div class="att-rows" style="margin-top:8px">${state.members.filter((m) => isWeekend(m) || map.has(m.id)).map((m) => `<div class="att-row"><span class="n">${esc(m.name)}</span>${btns(m.id, map.get(m.id), true)}</div>`).join('')}</div>
+        ${state.members.some((m) => !isWeekend(m) && !map.has(m.id)) ? `<div class="att-row" style="margin-top:8px"><span class="hint">다른 멤버 추가</span>
+          <select data-att-guest="${id}" aria-label="다른 멤버"><option value="">선택</option>${state.members.filter((m) => !isWeekend(m) && !map.has(m.id)).map((m) => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join('')}</select>
           <span class="hint">고르면 ‘참석’으로 추가됩니다</span></div>` : ''}</details>`}
       <div class="pmeta"><span class="pacts">${past ? '' : `<button class="btn cmt-toggle" type="button" data-ev-draw="${id}">이 참석자로 대진표</button><button class="btn ghost cmt-toggle" type="button" data-ev-copy="${id}">카톡용 안내 복사</button>`}</span><span class="pacts">${del}</span></div>
     </article>`;
@@ -1534,7 +1537,7 @@ header .wrap { position: relative; }
       $('draw-rounds').value = '';
       showTab('draw'); renderDraw(); window.scrollTo(0, 0);
       const exN = groups.yes.filter((m) => excludedIds().has(m.id)).length;
-      setStatus(`${fmtDay(e.starts_on)} 참석자 ${groups.yes.length}명을 체크했습니다${exN ? ` (대진표 제외 ${exN}명 빼고 ${groups.yes.length - exN}명)` : ''}. “대진표 만들기”를 누르세요.`);
+      setStatus(`${fmtDay(e.starts_on)} 참석자를 체크했습니다${exN && state.masterOk ? ` (대진표 제외 ${exN}명 빼고 ${groups.yes.length - exN}명)` : ''}. “대진표 만들기”를 누르세요.`);
       return;
     }
     if (d.evCopy) {
@@ -1636,7 +1639,7 @@ header .wrap { position: relative; }
   });
 
   // ---------- 새 버전 확인 ----------
-  const APP_VERSION = '2026.10.15-9';
+  const APP_VERSION = '2026.10.15-10';
   async function checkVersion() {
     try {
       const res = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
