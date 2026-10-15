@@ -106,3 +106,71 @@ test('동률 처리: 승점·승률·게임 득실차가 같으면 게임 득점
   const s = computeStandings(members, matches, { winPoints: 2, drawPoints: 1, lossPoints: 0 });
   assert.deepStrictEqual(s.slice(0, 2).map((x) => [x.id, x.rank, x.gamesWon]), [['b', 1, 7], ['a', 2, 6]]);
 });
+
+const { computeElo, makeDoublesDraw } = require('../ranking');
+
+test('computeElo: 같은 점수에서 이기면 +16, 강팀을 이기면 더 많이', () => {
+  const members = ['a', 'b', 'c', 'd'].map((id) => ({ id, name: id }));
+  const r1 = computeElo(members, [{ date: '1', teamA: ['a', 'b'], teamB: ['c', 'd'], sets: [[6, 1]] }]);
+  assert.strictEqual(Math.round(r1.get('a')), 1516);
+  assert.strictEqual(Math.round(r1.get('c')), 1484);
+  const r2 = computeElo(members, [
+    { date: '1', teamA: ['a', 'b'], teamB: ['c', 'd'], sets: [[6, 1]] },
+    { date: '2', teamA: ['c', 'd'], teamB: ['a', 'b'], sets: [[6, 2]] },
+  ]);
+  assert.ok(r2.get('c') - 1484 > 16); // 더 강한 팀을 이겨서 16보다 많이 받음
+});
+
+// 실제 클럽 규칙: 상기(S)는 문배(M) 또는 기웅(G)과만 짝. 대항전: S·G vs M·J
+const S = 'S', G = 'G', M = 'M', J = 'J';
+const rules = { partnerOf: { S: [M, G] }, rivalry: { teamA: [S, G], teamB: [M, J] } };
+const seq = (vals) => { let i = 0; return () => vals[i++ % vals.length]; };
+
+test('대진표: 네 명이면 상기 파트너는 항상 문배 또는 기웅', () => {
+  for (let t = 0; t < 30; t++) {
+    const d = makeDoublesDraw({ players: [S, G, M, J], rounds: 6, rules, mode: 'mix', random: Math.random });
+    for (const round of d.rounds) for (const m of round) {
+      const team = m.teamA.includes(S) ? m.teamA : m.teamB;
+      assert.ok([M, G].includes(team.find((x) => x !== S)));
+    }
+  }
+});
+
+test('대진표: rivalry 모드면 네 명일 때 팀 대항전만, mix 모드면 대항전과 상기·문배 조가 번갈아', () => {
+  const r = makeDoublesDraw({ players: [S, G, M, J], rounds: 4, rules, mode: 'rivalry' });
+  assert.ok(r.rounds.flat().every((m) => m.rivalry));
+  const x = makeDoublesDraw({ players: [S, G, M, J], rounds: 4, rules, mode: 'mix' });
+  const kinds = x.rounds.flat().map((m) => m.rivalry);
+  assert.deepStrictEqual(kinds.filter(Boolean).length, 2);
+  assert.ok(x.rounds.flat().some((m) => !m.rivalry && (m.teamA.join() + m.teamB.join()).includes(S) &&
+    [m.teamA, m.teamB].some((t) => t.includes(S) && t.includes(M))));
+});
+
+test('대진표: 7명 참석 1코트 — 경기 수가 고르게, 규칙 지킴, 같은 사람 중복 없음', () => {
+  const ps = [S, G, M, J, 'w', 'h', 'n'];
+  const d = makeDoublesDraw({ players: ps, rounds: 7, courts: 1, rules, mode: 'mix' });
+  assert.strictEqual(d.rounds.length, 7);
+  const counts = ps.map((p) => d.games.get(p));
+  assert.ok(Math.max(...counts) - Math.min(...counts) <= 1, counts.join());
+  for (const round of d.rounds) for (const m of round) {
+    assert.strictEqual(new Set(m.teamA.concat(m.teamB)).size, 4);
+    const four = m.teamA.concat(m.teamB);
+    if (four.includes(S) && (four.includes(M) || four.includes(G))) {
+      const team = m.teamA.includes(S) ? m.teamA : m.teamB;
+      assert.ok([M, G].includes(team.find((x) => x !== S)));
+    }
+  }
+});
+
+test('대진표: 8명 2코트 — 한 라운드에 같은 사람이 두 코트에 안 들어감', () => {
+  const ps = [S, G, M, J, 'w', 'h', 'n', 'k'];
+  const d = makeDoublesDraw({ players: ps, rounds: 3, courts: 2, rules, mode: 'mix' });
+  for (const round of d.rounds) {
+    assert.strictEqual(round.length, 2);
+    assert.strictEqual(new Set(round.flatMap((m) => m.teamA.concat(m.teamB))).size, 8);
+  }
+});
+
+test('대진표: 4명 미만이면 만들지 않음', () => {
+  assert.strictEqual(makeDoublesDraw({ players: [S, G, M], rounds: 3, rules }).error, 'need4');
+});

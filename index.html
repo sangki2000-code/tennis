@@ -171,6 +171,21 @@ textarea { font: 400 15px var(--font-body); color: var(--fg); background: var(--
 .post .pmeta { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
 .post .pacts { display: flex; flex-wrap: wrap; gap: 6px; }
 .badge { display: inline-block; font: 600 11px var(--font-body); color: var(--surface); background: var(--court); border-radius: 4px; padding: 1px 6px; margin-right: 6px; vertical-align: 2px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 6px 12px; font-size: 14px; cursor: pointer; }
+.chip input { accent-color: var(--court); }
+.chip.off { opacity: .55; cursor: not-allowed; }
+.rules { font-size: 13px; color: var(--muted); display: grid; gap: 2px; }
+.rules b { color: var(--fg); }
+.draw-list { display: grid; gap: 8px; }
+.draw-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.draw-row .no { font: 700 18px var(--font-display); color: var(--court); min-width: 2.6em; }
+.draw-row .vs { font-weight: 600; overflow-wrap: anywhere; }
+.draw-row .vs .tm { white-space: nowrap; }
+.draw-row .vs small { display: block; font-weight: 400; color: var(--muted); font-size: 12px; }
+.tag { display: inline-block; font: 600 11px var(--font-body); border-radius: 4px; padding: 1px 6px; margin-left: 4px; vertical-align: 1px; }
+.tag.riv { background: var(--court); color: var(--surface); }
+.tag.prac { background: var(--ball); color: var(--fg); }
 .update-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; border-color: var(--court); font-weight: 600; }
 footer.ver { color: var(--muted); font-size: 12px; text-align: center; padding-block: 0 32px; }
 .inline-form { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -216,6 +231,7 @@ header .wrap { position: relative; }
       <button role="tab" id="tab-rank" aria-controls="p-rank" aria-selected="true">순위</button>
       <button role="tab" id="tab-player" aria-controls="p-player" aria-selected="false">선수 기록</button>
       <button role="tab" id="tab-add" aria-controls="p-add" aria-selected="false">결과 입력</button>
+      <button role="tab" id="tab-draw" aria-controls="p-draw" aria-selected="false">대진표</button>
       <button role="tab" id="tab-log" aria-controls="p-log" aria-selected="false">경기 기록</button>
       <button role="tab" id="tab-board" aria-controls="p-board" aria-selected="false">게시판</button>
       <button role="tab" id="tab-mem" aria-controls="p-mem" aria-selected="false">멤버 · 설정</button>
@@ -332,6 +348,38 @@ header .wrap { position: relative; }
       </div>
     </section>
 
+    <section role="tabpanel" id="p-draw" aria-labelledby="tab-draw" hidden>
+      <div>
+        <h2>오늘의 대진표</h2>
+        <p class="hint">오늘 나온 멤버를 체크하고 대진표를 만드세요. 실력(레이팅)이 비슷하도록, 같은 파트너가 겹치지 않도록, 경기 수가 고르도록 짭니다.</p>
+      </div>
+      <div class="notice rules" id="draw-rules"></div>
+      <div class="panel" style="display:grid;gap:12px">
+        <div class="row" style="justify-content:space-between;align-items:center">
+          <strong>참석자 <span id="draw-count" class="hint"></span></strong>
+          <span class="row" style="gap:6px"><button class="btn ghost" type="button" id="draw-all">전체 선택</button><button class="btn ghost" type="button" id="draw-none">전체 해제</button></span>
+        </div>
+        <div class="chips" id="draw-people"></div>
+        <div class="row">
+          <div class="field" style="flex:0 1 120px">
+            <label for="draw-rounds">경기 수</label>
+            <input type="number" id="draw-rounds" min="1" max="20" step="1">
+          </div>
+          <div class="field" style="flex:0 1 120px">
+            <label for="draw-courts">코트 수</label>
+            <select id="draw-courts"><option value="1">1면</option><option value="2">2면</option></select>
+          </div>
+        </div>
+        <fieldset class="seg" id="draw-mode-box">
+          <legend id="draw-mode-legend">네 명이 모두 오면</legend>
+          <label><input type="radio" name="draw-mode" id="draw-mode-mix" value="mix" checked> 팀 대항전 + 대회 준비조 번갈아</label>
+          <label><input type="radio" name="draw-mode" id="draw-mode-rivalry" value="rivalry"> 팀 대항전만</label>
+        </fieldset>
+        <button class="btn" type="button" id="draw-make">대진표 만들기</button>
+      </div>
+      <div id="draw-out"></div>
+    </section>
+
     <section role="tabpanel" id="p-log" aria-labelledby="tab-log" hidden>
       <div>
         <h2>경기 기록</h2>
@@ -445,11 +493,11 @@ header .wrap { position: relative; }
     </section>
   </div>
 </main>
-<footer class="ver wrap">법무연수원 테니스 클럽 랭킹 · 버전 <span id="app-ver">2026.10.15-1</span> · <button type="button" class="namelink" id="master-link" style="font-size:12px;font-weight:500;color:var(--muted)">마스터</button></footer>
+<footer class="ver wrap">법무연수원 테니스 클럽 랭킹 · 버전 <span id="app-ver">2026.10.15-2</span> · <button type="button" class="namelink" id="master-link" style="font-size:12px;font-weight:500;color:var(--muted)">마스터</button></footer>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="config.js?v=2026.10.15-1"></script>
-<script src="ranking.js?v=2026.10.15-1"></script>
+<script src="config.js?v=2026.10.15-2"></script>
+<script src="ranking.js?v=2026.10.15-2"></script>
 <script>
 (function () {
   'use strict';
@@ -494,7 +542,7 @@ header .wrap { position: relative; }
   };
 
   // ---------- 탭 ----------
-  const tabs = ['rank', 'player', 'add', 'log', 'board', 'mem'];
+  const tabs = ['rank', 'player', 'add', 'draw', 'log', 'board', 'mem'];
   function showTab(key) {
     tabs.forEach((k) => {
       $('tab-' + k).setAttribute('aria-selected', String(k === key));
@@ -715,7 +763,7 @@ header .wrap { position: relative; }
   function renderAll() {
     // 다시 그려도 입력 중이던 칸의 포커스와 커서 위치를 지킵니다.
     const a = document.activeElement, keepId = a && a.id, sel = a && typeof a.selectionStart === 'number' ? [a.selectionStart, a.selectionEnd] : null;
-    renderSelects(); renderStandings(); renderPlayer(); renderLog(); renderBoard(); renderMembers(); updatePreview(); applyWriteState();
+    renderSelects(); renderStandings(); renderPlayer(); renderLog(); renderBoard(); renderDraw(); renderMembers(); updatePreview(); applyWriteState();
     if (keepId && document.activeElement !== a) {
       const el = document.getElementById(keepId);
       if (el) { try { el.focus({ preventScroll: true }); if (sel) el.setSelectionRange(sel[0], sel[1]); } catch (e) {} }
@@ -1144,6 +1192,156 @@ header .wrap { position: relative; }
   })();
 
 
+  // ---------- 대진표 ----------
+  // 클럽 규칙 (이름 기준). 바꾸려면 이 부분만 고치면 됩니다.
+  const DRAW_RULES = {
+    exclude: ['박정기'],                                    // 대진표에서 제외 (초보)
+    partnerOf: { '김상기': ['김문배', '최기웅'] },           // 김상기는 이 중 한 명과만 짝
+    rivalry: { nameA: '법무연수원', teamA: ['김상기', '최기웅'], nameB: '수지클럽', teamB: ['김문배', '서진호'] },
+  };
+  const idOf = (name) => (state.members.find((m) => m.name === name) || {}).id;
+  const drawStore = (() => { try { return JSON.parse(store.get('draw') || 'null'); } catch (e) { return null; } })();
+  state.draw = drawStore && drawStore.date === today() ? drawStore : null;
+  state.attend = new Set((() => { try { const a = JSON.parse(store.get('attend') || 'null'); return a && a.date === today() ? a.ids : []; } catch (e) { return []; } })());
+  const saveAttend = () => store.set('attend', JSON.stringify({ date: today(), ids: [...state.attend] }));
+  const excludedIds = () => new Set(DRAW_RULES.exclude.map(idOf).filter(Boolean));
+  const rivalryIds = () => {
+    const r = DRAW_RULES.rivalry, a = r.teamA.map(idOf), b = r.teamB.map(idOf);
+    return a.every(Boolean) && b.every(Boolean) ? { teamA: a, teamB: b } : null;
+  };
+  function drawRulesHtml() {
+    const r = DRAW_RULES.rivalry;
+    return `<span><b>팀 대항전</b> · ${esc(r.nameA)}(${r.teamA.map(esc).join('·')}) vs ${esc(r.nameB)}(${r.teamB.map(esc).join('·')}) — 네 명이 모두 오면 편성</span>
+      ${Object.entries(DRAW_RULES.partnerOf).map(([p, a]) => `<span><b>고정 파트너</b> · ${esc(p)}는 ${a.map(esc).join(' 또는 ')}와 짝 (같은 경기에 있을 때)</span>`).join('')}
+      <span><b>제외</b> · ${DRAW_RULES.exclude.map(esc).join(', ')} (대진표에만 빠지고 순위·기록은 그대로)</span>`;
+  }
+  function renderDraw() {
+    if (!$('draw-people')) return;
+    $('draw-rules').innerHTML = drawRulesHtml();
+    const ex = excludedIds();
+    $('draw-people').innerHTML = state.members.map((m) => {
+      const off = ex.has(m.id);
+      return `<label class="chip${off ? ' off' : ''}"><input type="checkbox" data-attend="${esc(m.id)}"${state.attend.has(m.id) && !off ? ' checked' : ''}${off ? ' disabled' : ''}> ${esc(m.name)}${off ? ' <small>(제외)</small>' : ''}</label>`;
+    }).join('');
+    const n = [...state.attend].filter((id) => !ex.has(id) && state.members.some((m) => m.id === id)).length;
+    $('draw-count').textContent = `${n}명`;
+    const rv = rivalryIds();
+    const allFour = rv && rv.teamA.concat(rv.teamB).every((id) => state.attend.has(id));
+    $('draw-mode-legend').textContent = allFour ? '네 명이 모두 왔습니다 — 방식 선택' : '네 명(김상기·최기웅·김문배·서진호)이 모두 오면';
+    if (document.activeElement !== $('draw-rounds') && !$('draw-rounds').value) $('draw-rounds').value = suggestRounds(n, Number($('draw-courts').value));
+    renderDrawOut();
+  }
+  function suggestRounds(n, courts) {
+    if (n < 4) return 4;
+    return Math.min(20, Math.max(3, Math.ceil((n * 3) / (4 * Math.max(1, courts)))));
+  }
+  function renderDrawOut() {
+    const el = $('draw-out');
+    const d = state.draw;
+    if (!d || !d.rounds || !d.rounds.length) { el.innerHTML = ''; return; }
+    const nm = (id) => memberName(id);
+    let no = 0;
+    const rows = d.rounds.map((round, ri) => round.map((m, ci) => {
+      no++;
+      const tag = m.rivalry ? '<span class="tag riv">팀 대항전</span>' : (m.practice ? '<span class="tag prac">대회 준비조</span>' : '');
+      return `<div class="draw-row"><span class="no">${no}경기</span>
+        <span class="vs"><span class="tm">${m.teamA.map(nm).map(esc).join('·')}</span> <span class="hint">vs</span> <span class="tm">${m.teamB.map(nm).map(esc).join('·')}</span>${tag}
+          ${round.length > 1 ? `<small>${ri + 1}라운드 · 코트 ${ci + 1}</small>` : ''}</span>
+        <button class="btn ghost cmt-toggle" type="button" data-draw-enter="${ri}:${ci}">결과 입력</button></div>`;
+    }).join('')).join('');
+    const counts = Object.entries(d.games).sort((a, b) => b[1] - a[1]).map(([id, g]) => `${esc(nm(id))} ${g}`).join(' · ');
+    el.innerHTML = `<div style="display:grid;gap:10px">
+      <h3 class="sec">${esc(d.date)} 대진표</h3>
+      <div class="draw-list">${rows}</div>
+      <p class="hint">경기 수 · ${counts}</p>
+      <div class="row"><button class="btn" type="button" id="draw-redo">다시 짜기</button><button class="btn ghost" type="button" id="draw-copy">카톡용 글 복사</button><button class="btn ghost" type="button" id="draw-post">게시판에 올리기</button></div>
+    </div>`;
+  }
+  function drawText() {
+    const d = state.draw; if (!d) return '';
+    const dt = new Date(d.date + 'T00:00:00');
+    const wd = '일월화수목금토'[dt.getDay()];
+    let no = 0;
+    const lines = d.rounds.flatMap((round, ri) => round.map((m, ci) => {
+      no++;
+      const tag = m.rivalry ? ' (팀 대항전)' : (m.practice ? ' (대회 준비조)' : '');
+      return `${no}경기${round.length > 1 ? ` [코트${ci + 1}]` : ''}  ${m.teamA.map(memberName).join('·')} vs ${m.teamB.map(memberName).join('·')}${tag}`;
+    }));
+    const counts = Object.entries(d.games).sort((a, b) => b[1] - a[1]).map(([id, g]) => `${memberName(id)} ${g}`).join(', ');
+    return `🎾 ${dt.getMonth() + 1}/${dt.getDate()}(${wd}) 대진표\n${lines.join('\n')}\n\n경기 수: ${counts}\n${location.origin + location.pathname}`;
+  }
+  function makeDraw() {
+    const ex = excludedIds();
+    const players = [...state.attend].filter((id) => !ex.has(id) && state.members.some((m) => m.id === id));
+    if (players.length < 4) { setStatus('복식 대진표는 참석자가 4명 이상이어야 합니다. 대진표 제외 멤버는 세지 않습니다.', true); return; }
+    const partnerOf = {};
+    for (const [p, allowed] of Object.entries(DRAW_RULES.partnerOf)) {
+      const pid = idOf(p); if (pid) partnerOf[pid] = allowed.map(idOf).filter(Boolean);
+    }
+    const courts = Number($('draw-courts').value) || 1;
+    const rounds = Math.max(1, Math.min(20, Number($('draw-rounds').value) || suggestRounds(players.length, courts)));
+    const mode = $('draw-mode-rivalry').checked ? 'rivalry' : 'mix';
+    const ratings = R.computeElo(state.members, state.matches);
+    const res = R.makeDoublesDraw({ players, rounds, courts, rules: { partnerOf, rivalry: rivalryIds() }, mode, ratings });
+    if (!res.rounds.length) { setStatus('규칙에 맞는 대진을 만들 수 없습니다. 참석자를 확인하세요.', true); return; }
+    // 대회 준비조 표시: 고정 파트너 규칙의 사람이 첫 번째 지정 파트너(김문배)와 짝인 경기
+    const prepPairs = Object.entries(partnerOf).map(([p, a]) => [p, a[0]]);
+    // 보기 좋게 정렬: 규칙에 나온 사람(김상기·최기웅·김문배·서진호 순)이 앞에, 그 사람이 있는 팀이 왼쪽에
+    const rv = rivalryIds();
+    const order = [...Object.keys(partnerOf), ...(rv ? rv.teamA.concat(rv.teamB) : [])];
+    const pri = (id) => { const i = order.indexOf(id); return i < 0 ? 99 : i; };
+    const sortTeam = (t) => t.slice().sort((x, y) => pri(x) - pri(y) || memberName(x).localeCompare(memberName(y), 'ko'));
+    const rounds2 = res.rounds.map((round) => round.map((m) => {
+      let a = sortTeam(m.teamA), b = sortTeam(m.teamB);
+      if (pri(b[0]) < pri(a[0])) [a, b] = [b, a];
+      return { ...m, teamA: a, teamB: b,
+        practice: !m.rivalry && prepPairs.some(([p, q]) => [a, b].some((t) => t.includes(p) && t.includes(q))) };
+    }));
+    state.draw = { date: today(), rounds: rounds2, games: Object.fromEntries(res.games) };
+    store.set('draw', JSON.stringify(state.draw));
+    setStatus('');
+    renderDrawOut();
+    if (res.rounds.length < rounds) setStatus(`규칙 때문에 ${res.rounds.length}경기까지만 만들었습니다.`, true);
+  }
+  $('draw-people').addEventListener('change', (ev) => {
+    const t = ev.target; if (!t.dataset.attend) return;
+    if (t.checked) state.attend.add(t.dataset.attend); else state.attend.delete(t.dataset.attend);
+    saveAttend(); $('draw-rounds').value = ''; renderDraw();
+  });
+  $('draw-all').addEventListener('click', () => { const ex = excludedIds(); state.members.forEach((m) => { if (!ex.has(m.id)) state.attend.add(m.id); }); saveAttend(); $('draw-rounds').value = ''; renderDraw(); });
+  $('draw-none').addEventListener('click', () => { state.attend.clear(); saveAttend(); $('draw-rounds').value = ''; renderDraw(); });
+  $('draw-courts').addEventListener('change', () => { $('draw-rounds').value = ''; renderDraw(); });
+  $('draw-make').addEventListener('click', makeDraw);
+  $('draw-out').addEventListener('click', async (ev) => {
+    const t = ev.target.closest('button'); if (!t) return;
+    if (t.id === 'draw-redo') { makeDraw(); return; }
+    if (t.id === 'draw-copy') {
+      try { await navigator.clipboard.writeText(drawText()); t.textContent = '복사됨 ✓'; setTimeout(() => { t.textContent = '카톡용 글 복사'; }, 2000); }
+      catch (e) { setStatus('복사하지 못했습니다. 게시판에 올리기를 이용해 주세요.', true); }
+      return;
+    }
+    if (t.id === 'draw-post') {
+      if (!canWrite()) { askPin('게시판에 올리려면 먼저 위의 클럽 PIN을 입력하세요.'); return; }
+      const d = state.draw, dt = new Date(d.date + 'T00:00:00');
+      $('post-title').value = `${dt.getMonth() + 1}/${dt.getDate()} 대진표`;
+      $('post-body').value = drawText();
+      showTab('board'); $('post-form').hidden = false; $('post-new').hidden = true;
+      setStatus('내용을 확인하고 작성자를 고른 뒤 “등록”을 누르세요.');
+      return;
+    }
+    if (t.dataset.drawEnter) {
+      const [ri, ci] = t.dataset.drawEnter.split(':').map(Number);
+      const m = state.draw.rounds[ri][ci];
+      if (state.editingId) endEdit();
+      $('t-double').checked = true; $('t-single').checked = false; syncType();
+      $('a1').value = m.teamA[0]; $('a2').value = m.teamA[1]; $('b1').value = m.teamB[0]; $('b2').value = m.teamB[1];
+      $('f-date').value = state.draw.date; $('f-score').value = '';
+      updatePreview(); showTab('add'); window.scrollTo(0, 0);
+      try { $('f-score').focus(); } catch (e) {}
+      if (!canWrite()) askPin('결과를 저장하려면 먼저 위의 클럽 PIN을 입력하세요.');
+    }
+  });
+
   // ---------- 게시판·댓글 이벤트 ----------
   document.addEventListener('input', (ev) => {
     const t = ev.target; if (!t.dataset || !t.dataset.draft) return;
@@ -1211,7 +1409,7 @@ header .wrap { position: relative; }
   });
 
   // ---------- 새 버전 확인 ----------
-  const APP_VERSION = '2026.10.15-1';
+  const APP_VERSION = '2026.10.15-2';
   async function checkVersion() {
     try {
       const res = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });

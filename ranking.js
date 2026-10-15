@@ -176,5 +176,145 @@
     };
   }
 
-  return { DEFAULT_SETTINGS, parseScore, decideWinner, formatScore, computeStandings, listMonths, filterMatches, memberDetail };
+  // ---------- 레이팅 (Elo) ----------
+  // 모두 1500에서 시작. 복식은 팀 평균으로 예상 승률을 구하고, 같은 팀은 같은 점수를 주고받습니다.
+  function computeElo(members, matches, opts) {
+    const K = (opts && opts.k) || 32;
+    const r = new Map(members.map((m) => [m.id, 1500]));
+    const get = (id) => (r.has(id) ? r.get(id) : 1500);
+    const ordered = [...matches].sort((x, y) => (x.date || '').localeCompare(y.date || '') || (x.createdAt || 0) - (y.createdAt || 0));
+    for (const m of ordered) {
+      const res = decideWinner(m.sets);
+      const ra = m.teamA.reduce((t, id) => t + get(id), 0) / m.teamA.length;
+      const rb = m.teamB.reduce((t, id) => t + get(id), 0) / m.teamB.length;
+      const ea = 1 / (1 + Math.pow(10, (rb - ra) / 400));
+      const sa = res.winner === 'A' ? 1 : res.winner === 'B' ? 0 : 0.5;
+      const delta = K * (sa - ea);
+      m.teamA.forEach((id) => r.set(id, get(id) + delta));
+      m.teamB.forEach((id) => r.set(id, get(id) - delta));
+    }
+    return r;
+  }
+
+  // ---------- 복식 대진표 ----------
+  // players: 참석자 id 배열 (제외 대상은 미리 빼서 넘김)
+  // rules: { partnerOf: { id: [허용 파트너 id...] }, rivalry: { teamA: [id,id], teamB: [id,id] } }
+  // mode: 'rivalry' (네 명 모두면 팀 대항전만) | 'mix' (대항전과 지정 파트너 조를 번갈아)
+  function makeDoublesDraw(opts) {
+    const players = [...new Set(opts.players)];
+    const courts = Math.max(1, Math.min(opts.courts || 1, Math.floor(players.length / 4)));
+    const rounds = Math.max(1, Math.min(opts.rounds || 4, 20));
+    const rules = opts.rules || {};
+    const partnerOf = rules.partnerOf || {};
+    const rating = opts.ratings || new Map();
+    const rnd = opts.random || Math.random;
+    const mode = opts.mode || 'mix';
+    const rv = rules.rivalry && rules.rivalry.teamA && rules.rivalry.teamB ? rules.rivalry : null;
+    const rvAll = rv ? rv.teamA.concat(rv.teamB) : [];
+    if (players.length < 4) return { rounds: [], games: new Map(), error: 'need4' };
+
+    const games = new Map(players.map((p) => [p, 0]));
+    const lastRound = new Map(players.map((p) => [p, -1]));
+    const partnered = new Map();
+    const faced = new Map();
+    const key = (a, b) => (a < b ? a + '|' + b : b + '|' + a);
+    const inc = (map, k) => map.set(k, (map.get(k) || 0) + 1);
+    const rate = (id) => (rating.has(id) ? rating.get(id) : 1500);
+    let rivalryCount = 0, practiceCount = 0;
+
+    // 지정 파트너 규칙: 그 사람이 경기에 있고 허용 파트너 중 누가 같은 경기에 있으면, 반드시 그중 한 명과 짝
+    function pairingOk(t1, t2) {
+      for (const [p, allowed] of Object.entries(partnerOf)) {
+        const team = t1.includes(p) ? t1 : t2.includes(p) ? t2 : null;
+        if (!team) continue;
+        const four = t1.concat(t2);
+        const avail = allowed.filter((a) => four.includes(a));
+        if (avail.length && !avail.includes(team.find((x) => x !== p))) return false;
+      }
+      return true;
+    }
+    const isRivalry = (t1, t2) => rv && ((rv.teamA.every((x) => t1.includes(x)) && rv.teamB.every((x) => t2.includes(x))) ||
+      (rv.teamA.every((x) => t2.includes(x)) && rv.teamB.every((x) => t1.includes(x))));
+
+    function bestPairing(four) {
+      const [a, b, c, d] = four;
+      const options = [[[a, b], [c, d]], [[a, c], [b, d]], [[a, d], [b, c]]];
+      const allRv = rv && rvAll.every((x) => four.includes(x));
+      let best = null, bestScore = Infinity;
+      for (const [t1, t2] of options) {
+        if (!pairingOk(t1, t2)) continue;
+        let sc = Math.abs((rate(t1[0]) + rate(t1[1])) / 2 - (rate(t2[0]) + rate(t2[1])) / 2) / 40;
+        sc += 3 * ((partnered.get(key(t1[0], t1[1])) || 0) + (partnered.get(key(t2[0], t2[1])) || 0));
+        for (const x of t1) for (const y of t2) sc += 0.5 * (faced.get(key(x, y)) || 0);
+        if (allRv) {
+          const riv = isRivalry(t1, t2);
+          if (mode === 'rivalry' && !riv) continue;
+          if (mode === 'mix') sc += riv ? (rivalryCount > practiceCount ? 6 : -6) : (rivalryCount > practiceCount ? -6 : 6);
+        }
+        sc += rnd() * 0.3;
+        if (sc < bestScore) { bestScore = sc; best = [t1, t2]; }
+      }
+      return best ? { teams: best, score: bestScore } : null;
+    }
+
+    // 지정 파트너가 필요한 사람이 뽑혔는데 허용 파트너가 없으면, 참석한 허용 파트너를 넣어 줌
+    function fixPartners(sel, pool) {
+      for (const [p, allowed] of Object.entries(partnerOf)) {
+        if (!sel.includes(p)) continue;
+        if (allowed.some((a) => sel.includes(a))) continue;
+        const cand = allowed.filter((a) => pool.includes(a) && !sel.includes(a)).sort((x, y) => games.get(x) - games.get(y));
+        if (!cand.length) continue;
+        const protectedIds = new Set(Object.keys(partnerOf).concat([p]));
+        const out = sel.filter((x) => !protectedIds.has(x) && !allowed.includes(x)).sort((x, y) => games.get(y) - games.get(x))[0];
+        if (out) sel[sel.indexOf(out)] = cand[0];
+      }
+      return sel;
+    }
+
+    function splitIntoGroups(sel) {
+      if (sel.length === 4) { const bp = bestPairing(sel); return bp ? [bp] : null; }
+      // 8명 → 4+4 나누기: 모든 조합 중 가장 좋은 것
+      let best = null, bestScore = Infinity;
+      const first = sel[0], rest = sel.slice(1);
+      const combos = [];
+      for (let i = 0; i < rest.length; i++) for (let j = i + 1; j < rest.length; j++) for (let k = j + 1; k < rest.length; k++) combos.push([first, rest[i], rest[j], rest[k]]);
+      for (const g1 of combos) {
+        const g2 = sel.filter((x) => !g1.includes(x));
+        const p1 = bestPairing(g1), p2 = bestPairing(g2);
+        if (!p1 || !p2) continue;
+        if (p1.score + p2.score < bestScore) { bestScore = p1.score + p2.score; best = [p1, p2]; }
+      }
+      return best;
+    }
+
+    const out = [];
+    for (let r = 0; r < rounds; r++) {
+      const order = players.slice().sort((x, y) => games.get(x) - games.get(y) || lastRound.get(x) - lastRound.get(y) || rnd() - 0.5);
+      let sel = fixPartners(order.slice(0, courts * 4), players);
+      let groups = splitIntoGroups(sel);
+      if (!groups) { // 규칙상 안 되는 조합이면 다음 후보로 한 명씩 바꿔 가며 시도
+        for (let i = courts * 4; i < order.length && !groups; i++) {
+          for (let j = sel.length - 1; j >= 0 && !groups; j--) {
+            const trial = sel.slice(); trial[j] = order[i];
+            if (new Set(trial).size !== trial.length) continue;
+            const g = splitIntoGroups(trial); if (g) { groups = g; sel = trial; }
+          }
+        }
+      }
+      if (!groups) break;
+      const matches = groups.map((g) => {
+        const [t1, t2] = g.teams;
+        t1.concat(t2).forEach((p) => { inc(games, p); lastRound.set(p, r); });
+        inc(partnered, key(t1[0], t1[1])); inc(partnered, key(t2[0], t2[1]));
+        for (const x of t1) for (const y of t2) inc(faced, key(x, y));
+        const riv = isRivalry(t1, t2);
+        if (rv && rvAll.every((x) => t1.concat(t2).includes(x))) { if (riv) rivalryCount++; else practiceCount++; }
+        return { teamA: t1, teamB: t2, rivalry: !!riv };
+      });
+      out.push(matches);
+    }
+    return { rounds: out, games };
+  }
+
+  return { DEFAULT_SETTINGS, parseScore, decideWinner, formatScore, computeStandings, listMonths, filterMatches, memberDetail, computeElo, makeDoublesDraw };
 });
