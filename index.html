@@ -296,8 +296,23 @@ header .wrap { position: relative; }
             <option value="double">복식만</option>
           </select>
         </div>
+        <div class="field">
+          <label for="rank-sort">정렬</label>
+          <select id="rank-sort">
+            <option value="points">승점순</option>
+            <option value="rating">레이팅순 (실력)</option>
+          </select>
+        </div>
       </div>
       <div id="standings"></div>
+      <details class="more"><summary>레이팅이란?</summary>
+        <div class="hint" style="margin-top:6px;display:grid;gap:4px">
+          <span>상대 실력을 반영한 점수입니다. 모두 1500점에서 시작합니다.</span>
+          <span>경기 전에 두 팀 점수 차이로 예상 승률을 구하고, 결과에 따라 최대 32점을 주고받습니다. 강한 상대를 이기면 많이 오르고, 약한 상대에게 지면 많이 떨어집니다.</span>
+          <span>복식은 두 사람 점수의 평균으로 계산하고, 같은 팀은 같은 점수를 얻거나 잃습니다. 경기를 많이 한다고 저절로 오르지 않습니다.</span>
+          <span>레이팅은 기간·경기 유형 필터와 관계없이 지금까지의 모든 경기로 계산합니다. ▲▼는 마지막 경기에서 오르내린 점수입니다.</span>
+        </div>
+      </details>
       <p class="hint">이름을 누르면 그 선수의 상세 기록과 상대 전적을 볼 수 있습니다.</p>
     </section>
 
@@ -527,11 +542,11 @@ header .wrap { position: relative; }
     </section>
   </div>
 </main>
-<footer class="ver wrap">법무연수원 테니스 클럽 랭킹 · 버전 <span id="app-ver">2026.10.15-6</span> · <button type="button" class="namelink" id="master-link" style="font-size:12px;font-weight:500;color:var(--muted)">마스터</button></footer>
+<footer class="ver wrap">법무연수원 테니스 클럽 랭킹 · 버전 <span id="app-ver">2026.10.15-7</span> · <button type="button" class="namelink" id="master-link" style="font-size:12px;font-weight:500;color:var(--muted)">마스터</button></footer>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="config.js?v=2026.10.15-6"></script>
-<script src="ranking.js?v=2026.10.15-6"></script>
+<script src="config.js?v=2026.10.15-7"></script>
+<script src="ranking.js?v=2026.10.15-7"></script>
 <script>
 (function () {
   'use strict';
@@ -616,11 +631,24 @@ header .wrap { position: relative; }
       el.innerHTML = '<div class="panel empty"><strong>이 기간에는 경기 기록이 없습니다</strong>기간이나 경기 유형을 바꿔 보세요.</div>';
       return;
     }
-    const rows = R.computeStandings(state.members, filtered, state.settings)
+    const elo = R.computeEloDetail(state.members, state.matches);
+    let rows = R.computeStandings(state.members, filtered, state.settings)
       .filter((s) => s.played || !(month || type));
+    rows.forEach((s) => { s.rating = Math.round(elo.ratings.get(s.id) || 1500); s.ratingDelta = elo.lastDelta.get(s.id); s.ratingGames = elo.games.get(s.id) || 0; });
+    const byRating = $('rank-sort').value === 'rating';
+    if (byRating) {
+      // 경기가 없는 멤버는 아직 실력을 알 수 없으니 맨 아래, 순위는 '–'
+      rows = rows.slice().sort((a, b) => (b.ratingGames > 0) - (a.ratingGames > 0) || b.rating - a.rating || a.name.localeCompare(b.name, 'ko'));
+      rows.forEach((s, i) => { s.rank = !s.ratingGames ? '–' : i > 0 && rows[i - 1].ratingGames && rows[i - 1].rating === s.rating ? rows[i - 1].rank : i + 1; });
+    }
+    const ratingCell = (s) => {
+      const d = s.ratingDelta;
+      const delta = d === undefined ? '' : ` <small class="${d > 0 ? 'pos' : d < 0 ? 'neg' : ''}">${d > 0 ? '▲' : d < 0 ? '▼' : ''}${Math.abs(Math.round(d))}</small>`;
+      return `<td class="${byRating ? 'pts' : ''}"${s.ratingGames ? '' : ' style="color:var(--muted)"'}>${s.rating}${delta}</td>`;
+    };
     const diff = (n) => `<span class="${n > 0 ? 'pos' : n < 0 ? 'neg' : ''}">${n > 0 ? '+' : ''}${n}</span>`;
     el.innerHTML = `<div class="table-scroll"><table>
-      <thead><tr><th>순위</th><th class="l">이름</th><th>경기</th><th>승</th><th>무</th><th>패</th><th>승률</th><th>게임</th><th>게임 득실</th><th>승점</th><th class="l">최근 5경기</th></tr></thead>
+      <thead><tr><th>순위</th><th class="l">이름</th><th>경기</th><th>승</th><th>무</th><th>패</th><th>승률</th><th>게임</th><th>게임 득실</th><th>승점</th><th>레이팅</th><th class="l">최근 5경기</th></tr></thead>
       <tbody>${rows.map((s) => `<tr>
         <td class="rank">${s.rank}</td>
         <td class="l name"><button type="button" class="namelink" data-player="${esc(s.id)}">${esc(s.name)}</button>${s.rank === 1 && s.played ? '<span class="ballmark" title="1위"></span>' : ''}</td>
@@ -628,10 +656,11 @@ header .wrap { position: relative; }
         <td>${s.played ? (s.winRate * 100).toFixed(0) + '%' : '–'}</td>
         <td>${s.gamesWon}-${s.gamesLost}</td>
         <td>${diff(s.gamesWon - s.gamesLost)}</td>
-        <td class="pts">${s.points}</td>
+        <td class="${byRating ? '' : 'pts'}">${s.points}</td>
+        ${ratingCell(s)}
         <td class="l"><span class="form">${s.recent.slice().reverse().map((r) => `<span class="wl ${r}">${r}</span>`).join('') || '<span class="hint">–</span>'}</span></td>
       </tr>`).join('')}</tbody></table></div>`;
-    $('rule-hint').textContent = `승리 ${state.settings.winPoints}점 · 무승부 ${state.settings.drawPoints}점 · 패배 ${state.settings.lossPoints}점. 승점 → 승률 → 게임 득실차 → 게임 득점 순으로 정렬합니다.`;
+    $('rule-hint').textContent = `승리 ${state.settings.winPoints}점 · 무승부 ${state.settings.drawPoints}점 · 패배 ${state.settings.lossPoints}점. ${byRating ? '지금은 레이팅(실력) 높은 순으로 보여 줍니다.' : '승점 → 승률 → 게임 득실차 → 게임 득점 순으로 정렬합니다.'}`;
   }
 
   function fillSelect(sel, placeholder, keep) {
@@ -669,6 +698,9 @@ header .wrap { position: relative; }
     const d = R.memberDetail(id, state.matches);
     if (!d.total.played) { el.innerHTML = `<div class="panel empty"><strong>${esc(memberName(id))} 선수의 경기 기록이 아직 없습니다</strong>첫 경기를 입력하면 여기에 기록이 쌓입니다.</div>`; return; }
     const streak = d.streak ? (d.streak.type === 'D' ? `${d.streak.count}연속 무` : `${d.streak.count}연${d.streak.type === 'W' ? '승' : '패'}`) : '–';
+    const eloD = R.computeEloDetail(state.members, state.matches);
+    const myR = Math.round(eloD.ratings.get(id) || 1500);
+    const pr = { rating: myR, delta: eloD.lastDelta.get(id), rank: 1 + state.members.filter((m) => eloD.games.get(m.id) && Math.round(eloD.ratings.get(m.id) || 1500) > myR).length };
     const monthRank = (m) => {
       const ms = R.filterMatches(state.matches, { month: m });
       const row = R.computeStandings(state.members, ms, state.settings).filter((s) => s.played).find((s) => s.id === id);
@@ -685,6 +717,7 @@ header .wrap { position: relative; }
         <div class="tile"><div class="k">단식</div><div class="v">${wdl(d.singles)}</div><div class="s">승률 ${pct(d.singles)}</div></div>
         <div class="tile"><div class="k">복식</div><div class="v">${wdl(d.doubles)}</div><div class="s">승률 ${pct(d.doubles)}</div></div>
         <div class="tile"><div class="k">게임 득실</div><div class="v">${signed(d.total.gamesWon - d.total.gamesLost)}</div><div class="s">${d.total.gamesWon}득 ${d.total.gamesLost}실</div></div>
+        <div class="tile"><div class="k">레이팅</div><div class="v">${pr.rating}</div><div class="s">${pr.delta === undefined ? '아직 경기 없음' : `최근 ${pr.delta > 0 ? '▲' : pr.delta < 0 ? '▼' : ''}${Math.abs(Math.round(pr.delta))} · 전체 ${pr.rank}위`}</div></div>
         <div class="tile"><div class="k">현재 흐름</div><div class="v">${streak}</div><div class="s">최다 연승 ${d.bestWinStreak}</div></div>
       </div>
 
@@ -1079,6 +1112,8 @@ header .wrap { position: relative; }
   $('log-filter').addEventListener('change', renderLog);
   $('rank-month').addEventListener('change', renderStandings);
   $('rank-type').addEventListener('change', renderStandings);
+  $('rank-sort').addEventListener('change', () => { store.set('rank_sort', $('rank-sort').value); renderStandings(); });
+  try { const rs = store.get('rank_sort'); if (rs) $('rank-sort').value = rs; } catch (e) {}
   $('player-select').addEventListener('change', () => { store.set('player', $('player-select').value || null); renderPlayer(); });
   document.addEventListener('click', (ev) => {
     const b = ev.target.closest('.namelink[data-player]');
@@ -1580,7 +1615,7 @@ header .wrap { position: relative; }
   });
 
   // ---------- 새 버전 확인 ----------
-  const APP_VERSION = '2026.10.15-6';
+  const APP_VERSION = '2026.10.15-7';
   async function checkVersion() {
     try {
       const res = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });

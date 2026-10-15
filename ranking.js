@@ -178,8 +178,11 @@
 
   // ---------- 레이팅 (Elo) ----------
   // 모두 1500에서 시작. 복식은 팀 평균으로 예상 승률을 구하고, 같은 팀은 같은 점수를 주고받습니다.
-  function computeElo(members, matches, opts) {
+  function computeElo(members, matches, opts) { return computeEloDetail(members, matches, opts).ratings; }
+  // ratings: 현재 레이팅, lastDelta: 각자 마지막 경기에서 오르내린 점수, games: 레이팅에 반영된 경기 수
+  function computeEloDetail(members, matches, opts) {
     const K = (opts && opts.k) || 32;
+    const lastDelta = new Map(), played = new Map();
     const r = new Map(members.map((m) => [m.id, 1500]));
     const get = (id) => (r.has(id) ? r.get(id) : 1500);
     const ordered = [...matches].sort((x, y) => (x.date || '').localeCompare(y.date || '') || (x.createdAt || 0) - (y.createdAt || 0));
@@ -190,10 +193,10 @@
       const ea = 1 / (1 + Math.pow(10, (rb - ra) / 400));
       const sa = res.winner === 'A' ? 1 : res.winner === 'B' ? 0 : 0.5;
       const delta = K * (sa - ea);
-      m.teamA.forEach((id) => r.set(id, get(id) + delta));
-      m.teamB.forEach((id) => r.set(id, get(id) - delta));
+      m.teamA.forEach((id) => { r.set(id, get(id) + delta); lastDelta.set(id, delta); played.set(id, (played.get(id) || 0) + 1); });
+      m.teamB.forEach((id) => { r.set(id, get(id) - delta); lastDelta.set(id, -delta); played.set(id, (played.get(id) || 0) + 1); });
     }
-    return r;
+    return { ratings: r, lastDelta, games: played };
   }
 
   // ---------- 복식 대진표 ----------
@@ -413,5 +416,5 @@
     return best;
   }
 
-  return { DEFAULT_SETTINGS, parseScore, decideWinner, formatScore, computeStandings, listMonths, filterMatches, memberDetail, computeElo, makeDoublesDraw, makeBestDraw };
+  return { DEFAULT_SETTINGS, parseScore, decideWinner, formatScore, computeStandings, listMonths, filterMatches, memberDetail, computeElo, computeEloDetail, makeDoublesDraw, makeBestDraw };
 });

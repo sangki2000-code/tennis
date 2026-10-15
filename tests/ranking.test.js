@@ -282,3 +282,17 @@ test('짝 피하기: 문배·기웅이 오면 기존 규칙대로 (피하기 규
     assert.ok(ms.some((m) => m.rivalry) && ms.some((m) => paired(m, S, M)) && ms.some((m) => paired(m, H, M)) && ms.some((m) => paired(m, W, G)));
   }
 });
+
+test('computeEloDetail: 마지막 변화량과 반영 경기 수', () => {
+  const { computeEloDetail } = require('../ranking');
+  const members = ['a', 'b', 'c', 'd'].map((id) => ({ id, name: id }));
+  const d = computeEloDetail(members, [
+    { date: '1', teamA: ['a', 'b'], teamB: ['c', 'd'], sets: [[6, 1]] },
+    { date: '2', teamA: ['a'], teamB: ['c'], sets: [[2, 6]] },
+  ]);
+  assert.strictEqual(Math.round(d.lastDelta.get('a')), -Math.round(d.lastDelta.get('c')));
+  assert.ok(d.lastDelta.get('a') < 0);
+  assert.strictEqual(Math.round(d.lastDelta.get('b')), 16);
+  assert.deepStrictEqual([d.games.get('a'), d.games.get('b'), d.games.get('d')], [2, 1, 1]);
+  assert.strictEqual(d.ratings.get('a') + d.ratings.get('b') + d.ratings.get('c') + d.ratings.get('d'), 6000); // 주고받기라 합계 유지
+});
