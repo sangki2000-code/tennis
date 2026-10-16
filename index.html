@@ -624,11 +624,11 @@ header .wrap { position: relative; }
     </section>
   </div>
 </main>
-<footer class="ver wrap">법무연수원 테니스 클럽 랭킹 · 버전 <span id="app-ver">2026.10.15-17</span> · <button type="button" class="namelink" id="master-link" style="font-size:12px;font-weight:500;color:var(--muted)">마스터</button></footer>
+<footer class="ver wrap">법무연수원 테니스 클럽 랭킹 · 버전 <span id="app-ver">2026.10.16-1</span> · <button type="button" class="namelink" id="master-link" style="font-size:12px;font-weight:500;color:var(--muted)">마스터</button></footer>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="config.js?v=2026.10.15-17"></script>
-<script src="ranking.js?v=2026.10.15-17"></script>
+<script src="config.js?v=2026.10.16-1"></script>
+<script src="ranking.js?v=2026.10.16-1"></script>
 <script>
 (function () {
   'use strict';
@@ -1681,10 +1681,8 @@ header .wrap { position: relative; }
       + (past.length ? `<details class="more"><summary>지난 일정 ${past.length}개</summary><div class="posts" style="margin-top:10px">${past.map((e) => eventCard(e, true)).join('')}</div></details>` : '');
   }
   function attendText(e) {
-    const { groups } = attOf(e.id);
-    const list = (arr) => arr.map((m) => m.name).join(', ') || '없음';
     const wd = WD[new Date(e.starts_on + 'T00:00:00').getDay()];
-    return `🎾 ${eventTitle(e)}${e.note ? '\n' + e.note : ''}\n${wd}요일 운동 참석의사 체크 바랍니다 👉 ${location.origin + location.pathname}#attend\n\n참석(${groups.yes.length}): ${list(groups.yes)}\n불참(${groups.no.length}): ${list(groups.no)}\n미정(${groups.maybe.length}): ${list(groups.maybe)}\n미응답(${groups.none.length}): ${list(groups.none)}`;
+    return `🎾 ${eventTitle(e)}${e.note ? '\n' + e.note : ''}\n\n${wd}요일 운동 참석의사를 아래 링크에서 체크해 주세요.\n(내 이름을 고르고 참석·불참·미정 중 하나를 누르면 됩니다)\n👉 ${location.origin + location.pathname}#attend`;
   }
   $('events').addEventListener('change', (ev) => {
     const t = ev.target;
@@ -2163,7 +2161,7 @@ header .wrap { position: relative; }
   });
 
   // ---------- 새 버전 확인 ----------
-  const APP_VERSION = '2026.10.15-17';
+  const APP_VERSION = '2026.10.16-1';
   async function checkVersion() {
     try {
       const res = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
