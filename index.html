@@ -624,11 +624,11 @@ header .wrap { position: relative; }
     </section>
   </div>
 </main>
-<footer class="ver wrap">법무연수원 테니스 클럽 랭킹 · 버전 <span id="app-ver">2026.10.16-1</span> · <button type="button" class="namelink" id="master-link" style="font-size:12px;font-weight:500;color:var(--muted)">마스터</button></footer>
+<footer class="ver wrap">법무연수원 테니스 클럽 랭킹 · 버전 <span id="app-ver">2026.10.17-1</span> · <button type="button" class="namelink" id="master-link" style="font-size:12px;font-weight:500;color:var(--muted)">마스터</button></footer>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="config.js?v=2026.10.16-1"></script>
-<script src="ranking.js?v=2026.10.16-1"></script>
+<script src="config.js?v=2026.10.17-1"></script>
+<script src="ranking.js?v=2026.10.17-1"></script>
 <script>
 (function () {
   'use strict';
@@ -1468,7 +1468,7 @@ header .wrap { position: relative; }
         <button class="btn" type="button" id="draw-save">적은 결과 한 번에 저장</button>
       </div>` : ''}
       <p class="hint">경기 수 · ${counts}</p>
-      <div class="row">${state.masterOk ? '<button class="btn" type="button" id="draw-redo">다시 짜기</button>' : ''}<button class="btn ghost" type="button" id="draw-copy">카톡용 글 복사</button><button class="btn ghost" type="button" id="draw-post">게시판에 올리기</button>${state.masterOk ? `<button class="btn danger" type="button" id="draw-del">${drawDelArmed === d.date ? '정말 삭제할까요? 한 번 더 누르세요' : '대진표 삭제'}</button>` : ''}</div>
+      <div class="row">${state.masterOk ? '<button class="btn" type="button" id="draw-redo">다시 짜기</button>' : ''}<button class="btn" type="button" id="draw-kakao">카톡으로 보내기</button><button class="btn ghost" type="button" id="draw-copy">카톡용 글 복사</button><button class="btn ghost" type="button" id="draw-post">게시판에 올리기</button>${state.masterOk ? `<button class="btn danger" type="button" id="draw-del">${drawDelArmed === d.date ? '정말 삭제할까요? 한 번 더 누르세요' : '대진표 삭제'}</button>` : ''}</div>
     </div>`;
     if ($('draw-by')) fillSelect($('draw-by'), '선택 안 함', keepBy);
   }
@@ -1608,6 +1608,12 @@ header .wrap { position: relative; }
     if (t.id === 'draw-redo') { makeDraw(); return; }
     if (t.id === 'draw-del') { removeDraw(); return; }
     if (t.id === 'draw-save') { saveDrawScores(); return; }
+    if (t.id === 'draw-kakao') {
+      const d = currentDraw(); if (!d) return;
+      const games = drawGames(d), done = drawLinks(d).filter(Boolean).length;
+      shareKakao({ title: `🎾 ${fmtDay(d.date)} 대진표`, description: `${games.length}경기 · ${Object.keys(d.games).length}명${done ? ` · ${done}경기 결과 입력` : ''}`, tab: 'draw', button: '대진표 보기' }, drawText());
+      return;
+    }
     if (t.id === 'draw-copy') {
       try { await navigator.clipboard.writeText(drawText()); t.textContent = '복사됨 ✓'; setTimeout(() => { t.textContent = '카톡용 글 복사'; }, 2000); }
       catch (e) { setStatus('복사하지 못했습니다. 게시판에 올리기를 이용해 주세요.', true); }
@@ -1667,7 +1673,7 @@ header .wrap { position: relative; }
         ${state.members.some((m) => !isWeekend(m) && !map.has(m.id)) ? `<div class="att-row" style="margin-top:8px"><span class="hint">다른 멤버 추가</span>
           <select data-att-guest="${id}" aria-label="다른 멤버"><option value="">선택</option>${state.members.filter((m) => !isWeekend(m) && !map.has(m.id)).map((m) => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join('')}</select>
           <span class="hint">고르면 ‘참석’으로 추가됩니다</span></div>` : ''}</details>`}
-      <div class="pmeta"><span class="pacts">${past ? '' : `${state.masterOk ? `<button class="btn cmt-toggle" type="button" data-ev-draw="${id}">이 참석자로 대진표</button>` : ''}<button class="btn ghost cmt-toggle" type="button" data-ev-copy="${id}">카톡용 안내 복사</button>`}</span><span class="pacts">${del}</span></div>
+      <div class="pmeta"><span class="pacts">${past ? '' : `${state.masterOk ? `<button class="btn cmt-toggle" type="button" data-ev-draw="${id}">이 참석자로 대진표</button>` : ''}<button class="btn cmt-toggle" type="button" data-ev-kakao="${id}">카톡으로 보내기</button><button class="btn ghost cmt-toggle" type="button" data-ev-copy="${id}">카톡용 안내 복사</button>`}</span><span class="pacts">${del}</span></div>
     </article>`;
   }
   function renderAttend() {
@@ -1720,6 +1726,12 @@ header .wrap { position: relative; }
       showTab('draw'); renderDraw(); window.scrollTo(0, 0);
       const exN = groups.yes.filter((m) => excludedIds().has(m.id)).length;
       setStatus(`${fmtDay(e.starts_on)} 참석자를 체크했습니다${exN && state.masterOk ? ` (대진표 제외 ${exN}명 빼고 ${groups.yes.length - exN}명)` : ''}. “대진표 만들기”를 누르세요.`);
+      return;
+    }
+    if (d.evKakao) {
+      const e = state.events.find((x) => x.id === d.evKakao); if (!e) return;
+      const wd = WD[new Date(e.starts_on + 'T00:00:00').getDay()];
+      shareKakao({ title: `🎾 ${eventTitle(e)}`, description: `${e.note ? e.note + ' · ' : ''}${wd}요일 운동 참석의사를 체크해 주세요.`, tab: 'attend', button: '참석 체크하기' }, attendText(e));
       return;
     }
     if (d.evCopy) {
@@ -1886,6 +1898,48 @@ header .wrap { position: relative; }
     let t = text; while (t.length > 1 && ctx.measureText(t + '…').width > maxW) t = t.slice(0, -1);
     return t + '…';
   }
+  // ---------- 카카오톡 공유 카드 ----------
+  // config.js 의 kakaoJsKey 가 있으면 카카오 SDK 로 카드(그림 + 버튼)를 보내고,
+  // 없거나 실패하면 휴대폰 공유 화면 → 그래도 안 되면 글 복사로 대신합니다.
+  const KAKAO_KEY = (window.TENNIS_CONFIG || {}).kakaoJsKey || '';
+  let kakaoLoading = null;
+  function loadKakao() {
+    if (!KAKAO_KEY) return Promise.resolve(false);
+    if (!kakaoLoading) {
+      kakaoLoading = new Promise((res) => {
+        if (window.Kakao) { res(true); return; }
+        const sc = document.createElement('script');
+        sc.src = 'https://t1.kakaocdn.net/kakao_js_sdk/2.7.4/kakao.min.js'; sc.crossOrigin = 'anonymous';
+        sc.onload = () => res(true); sc.onerror = () => { kakaoLoading = null; res(false); };
+        document.head.appendChild(sc);
+      }).then((ok) => {
+        try { if (ok && window.Kakao && !window.Kakao.isInitialized()) window.Kakao.init(KAKAO_KEY); } catch (e) { return false; }
+        return !!(ok && window.Kakao && window.Kakao.Share);
+      });
+    }
+    return kakaoLoading;
+  }
+  if (KAKAO_KEY) setTimeout(loadKakao, 1500); // 버튼을 누를 때 기다리지 않도록 미리 불러 둠
+  async function shareKakao(card, text) {
+    const appUrl = location.origin + location.pathname;
+    if (await loadKakao()) {
+      try {
+        const link = { mobileWebUrl: `${appUrl}#${card.tab}`, webUrl: `${appUrl}#${card.tab}` };
+        window.Kakao.Share.sendDefault({
+          objectType: 'feed',
+          content: { title: card.title, description: card.description, imageUrl: new URL('icons/kakao-card.jpg', appUrl).href, imageWidth: 800, imageHeight: 400, link },
+          buttons: [{ title: card.button, link }],
+        });
+        return;
+      } catch (e) { /* 아래 방법으로 대신 */ }
+    }
+    if (navigator.share) {
+      try { await navigator.share({ text }); return; } catch (e) { if (e && e.name === 'AbortError') return; }
+    }
+    try { await navigator.clipboard.writeText(text); setStatus('카톡 공유를 열 수 없어 글을 복사했습니다. 단톡방에 붙여넣어 주세요.'); }
+    catch (e) { setStatus('공유하지 못했습니다. “카톡용 글 복사”를 이용해 주세요.', true); }
+  }
+
   async function makeShareImage(date) {
     try { await document.fonts.ready; } catch (e) {}
     const W = 1080, PAD = 64;
@@ -2161,7 +2215,7 @@ header .wrap { position: relative; }
   });
 
   // ---------- 새 버전 확인 ----------
-  const APP_VERSION = '2026.10.16-1';
+  const APP_VERSION = '2026.10.17-1';
   async function checkVersion() {
     try {
       const res = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
